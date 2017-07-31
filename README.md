@@ -40,6 +40,6 @@ but some fluency in tmsh syntax is recommended.
 
 This tool is not supported by F5 support. If you find an issue, we would love to hear about it. Please let us know by [filling an issue](https://github.com/f5devcentral/f5-tmsh2iapp/issues) in this repository. Tell us as much as you can about what you found, how you found it, your environment, etc.. We also welcome you to file feature requests as issues.
 
-**tmsh2iapp** is released to the community under the **![Apache v2 license](http://www.apache.org/licenses/LICENSE-2.0.txt)**. It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+**tmsh2iapp** is released to the community under the **![Apache v2 license]**(http://www.apache.org/licenses/LICENSE-2.0.txt). It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 
 Individuals or business entities who contribute to this project must have completed and submitted the F5 Contributor License Agreement to cla@f5.com prior to their code submission being included in this project.
