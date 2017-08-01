@@ -156,8 +156,9 @@
 # 2017/07/21 - u.alonsocamaro@f5.com - Support comments within the .t2i file by using the # symbol
 # 2017/07/21 - u.alonsocamaro@f5.com - Made more relaxed the usage of @ and #. They can have spaces from the beginning of the line now. They must match ^\s*(@|#)
 # 2017/07/31 - u.alonsocamaro@f5.com - Added check_variable_names to avoid mistake of using hyphen in variable names
+# 2017/08/01 - u.alonsocamaro@f5.com - FIX: @service_folder can now be really placed anywhere
 
-$tmsh2iapp_version= "20170731.2";
+$tmsh2iapp_version= "20170801.1";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -316,6 +317,7 @@ my @import_perl_types= @import_file_types;
 
 # check if the template contains attributes, if so gather them...
 my @attribute_lines= grep /^\s*@/, split(/\n/, $raw_content);
+
 foreach $al (@attribute_lines) {
     
     $_= $al;
@@ -324,6 +326,8 @@ foreach $al (@attribute_lines) {
 	$attribute= $1;
 	$variable= $2;
 	$value= $3;
+    } elsif (/\@service_folder/) {
+	# Do nothing, service_folder can be anywhere
     } else {
 	print STDERR "Aborting due to unexpected attribute line. The offending line is shown next: $al\n";
 	exit(1);
