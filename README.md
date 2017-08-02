@@ -36,7 +36,7 @@ but some fluency in tmsh syntax is recommended.
 
 # Using tmsh2iapp
 
-Download the tool from ![this link](https://raw.githubusercontent.com/f5devcentral/f5-tmsh2iapp/master/tmsh2iapp.pl).
+**Download the tool from ![this link](https://raw.githubusercontent.com/f5devcentral/f5-tmsh2iapp/master/tmsh2iapp.pl).**
 
 **Please refer to ![project's wiki page](https://github.com/f5devcentral/f5-tmsh2iapp/wiki/) for documentation, examples and guidelines of use.**
 
