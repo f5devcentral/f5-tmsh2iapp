@@ -157,8 +157,9 @@
 # 2017/07/21 - u.alonsocamaro@f5.com - Made more relaxed the usage of @ and #. They can have spaces from the beginning of the line now. They must match ^\s*(@|#)
 # 2017/07/31 - u.alonsocamaro@f5.com - Added check_variable_names to avoid mistake of using hyphen in variable names
 # 2017/08/01 - u.alonsocamaro@f5.com - FIX: @service_folder can now be really placed anywhere
+# 2017/08/02 - u.alonsocamaro@f5.com - FIX: @service_folder can now be really placed anywhere (part 2)
 
-$tmsh2iapp_version= "20170801.1";
+$tmsh2iapp_version= "20170802.1";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -289,8 +290,8 @@ if (($ARGV[0] eq "system") && ($raw_content =~ /ltm pool/)) {
 }
 
 
-# remove the attributes
-$content= join("\n", grep(!/^\s*(@|\#)/, split(/\n/, $raw_content)));
+# remove the attributes but not @service_folder
+$content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import)|\#)/, split(/\n/, $raw_content)));
 
 # get the variables from the t2i file
 my @matches = uniq ( $content =~ /(__pm__.+?__|__dr__.+?__|__fwal__.+?__|__fwpl__.+?__|__urlcat_match__.+?_.+?__|__urlcat_nomatch__.+?_.+?__|__pool__.+?__|__.+?__)/g );
