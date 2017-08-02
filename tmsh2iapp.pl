@@ -158,8 +158,9 @@
 # 2017/07/31 - u.alonsocamaro@f5.com - Added check_variable_names to avoid mistake of using hyphen in variable names
 # 2017/08/01 - u.alonsocamaro@f5.com - FIX: @service_folder can now be really placed anywhere
 # 2017/08/02 - u.alonsocamaro@f5.com - FIX: @service_folder can now be really placed anywhere (part 2)
+# 2017/08/02 - u.alonsocamaro@f5.com - FIX: incremental loader would previously fail if policy is at the top of the .t2i file 
 
-$tmsh2iapp_version= "20170802.1";
+$tmsh2iapp_version= "20170802.2";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -638,6 +639,14 @@ sub iapp_implementation_variables_instantiation {
 
 sub iapp_implementation_config_load_section {
 
+    $_= $_[0];
+    if (m/^\s*$/) {
+        print STDERR "load_section: No content in section: \n$_[0]\n" if ($debug);
+        return "";
+    } else {
+	print STDERR "load_section: content found in section: \n$_[0]\n" if ($debug);
+    }
+
     my $vars_instantiation= iapp_implementation_variables_instantiation();
 
     my $txt = << "CFG";
@@ -753,13 +762,8 @@ sub iapp_implementation_incremental_loader {
 	$i= $i +1;
     }
 
-    
-    $_= $remaining;
-    if (!m/^\s*$/) {
-
-	print STDERR ">>> remaining:\n", $remaining, "\n" if ($debug);
-	$retval.= iapp_implementation_config_load_section($remaining);
-    }
+    print STDERR ">>> remaining:\n", $remaining, "\n" if ($debug);
+    $retval.= iapp_implementation_config_load_section($remaining);
 
     return $retval;
 }
