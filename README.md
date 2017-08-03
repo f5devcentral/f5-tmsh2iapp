@@ -42,8 +42,8 @@ but some fluency in tmsh syntax is recommended.
 
 This tool is not supported by F5 support. If you find an issue, we would love to hear about it. Please let us know by [filling an issue](https://github.com/f5devcentral/f5-tmsh2iapp/issues) in this repository. Tell us as much as you can about what you found, how you found it, your environment, etc.. We also welcome you to file feature requests as issues.
 
-If you have any question post it in https://devcentral.f5.com/questions. Note there is also a ![Frequently Asked Questions page](https://github.com/f5devcentral/f5-tmsh2iapp/wiki/Frequently-Asked-Questions) in the tmsh2iapp wiki.
+If you have any question post it in https://devcentral.f5.com/questions. Note there is also a [Frequently Asked Questions page](https://github.com/f5devcentral/f5-tmsh2iapp/wiki/Frequently-Asked-Questions) in the tmsh2iapp wiki.
 
-We would love to hear your experiences with this tool, please share them in ![this link of devcentral](https://devcentral.f5.com/codeshare/tmsh2iapp-iapp-generator-create-iapps-in-minutes-1065).
+We would love to hear your experiences with this tool, please share them in [this link of devcentral](https://devcentral.f5.com/codeshare/tmsh2iapp-iapp-generator-create-iapps-in-minutes-1065).
 
 **tmsh2iapp is released to the community under the [Apache v2 license](http://www.apache.org/licenses/LICENSE-2.0.txt)**. It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
