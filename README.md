@@ -19,6 +19,7 @@ but some fluency in tmsh syntax is recommended.
 * It is not BIG-IP version specific but it is being tested with BIG-IP 11.6-13.0
 * Supports LTM policies
 * It has been used with LTM, AFM and PEM modules. ASM support is in the works.
+* Multi-tenancy: It has been used with route-domains and partitions.
 * It allows importing (from external files) the following configuration objects:
     * apache-ssl-cert          SSL certificates management
     * browser-capabilities-db  browser capabilities DB file management
