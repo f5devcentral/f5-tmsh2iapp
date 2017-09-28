@@ -158,9 +158,79 @@
 # 2017/07/31 - u.alonsocamaro@f5.com - Added check_variable_names to avoid mistake of using hyphen in variable names
 # 2017/08/01 - u.alonsocamaro@f5.com - FIX: @service_folder can now be really placed anywhere
 # 2017/08/02 - u.alonsocamaro@f5.com - FIX: @service_folder can now be really placed anywhere (part 2)
-# 2017/08/02 - u.alonsocamaro@f5.com - FIX: incremental loader would previously fail if policy is at the top of the .t2i file 
+# 2017/08/02 - u.alonsocamaro@f5.com - FIX: incremental loader would previously fail if policy is at the top of the .t2i file
+# 2017/09/28 - u.alonsocamaro@f5.com - Introduction of per bigip's variables. I call these __local__ variables and are intended to be used for base configs / not sync'ed configs like non-floating self-IPs
+#
+#                                      RATIONALE
+#
+#                                      The behaviour of iApps (in general) for non-floating/not sync'ed configuration elements is the following:
+#
+#                                      - The iApp template is sync'ed
+#                                      - On instantiation of the iApp in a BIG-IP the parameters (ie: "list sys application service <iapp.app/iapp>") will be also sync'ed to other BIG-IPs
+#                                        but the iApps are not re-run so that local configuration is not generated in the BIG-IPs where the iApp was instantiated in the first place.
+#                                      - The iApp's parameters can be changed in the other BIG-IPs where the iApp was not instantiated initially and the appropiate configuration for the BIG-IP would be in place.
+#
+#                                      This iApp behaviour has the following inconvenients:
+#
+#                                      - Even after config-sync When looking in the GUI of the different BIG-IPs the iApps parameters will look inconsistent in the BIG-IPs 
+#                                        with the exception the last one where the iApp was instantiated.
+#
+#                                        Note although they look like inconsistent the actual local config is correct because the actual config is generated in each BIG-IP and it is not sync'ed on config-sync.
+#
+#                                      - Because the iApp parameters change across BIG-IPs blindly re-configuring an iApp might lead to wrong configuration being applied.
+#
+#                                      Local variables avoid these problems. Note that although they still require to be executed in all nodes at deletion time it is 
+#                                      only required to do a delete in any BIG-IP and then sync the configuration.
+#
+#                                      USING __local__ VARIABLES
+#
+#                                      The syntax is very similar to regular variables but adding the __local prefix. An example follows:
+#
+#                                      @label(__local__self_vxlan__): IP address with prefix of the self interface connected to the VxLAN
+#
+#                                      net self self-vxlan-__vxlanid__ {
+#                                          address __local__self_vxlan__
+#                                          traffic-group /Common/traffic-group-local-only
+#                                          vlan vxlan-__vxlanid__
+#                                      }
+#
+#
+#                                      When there is a __local__ variable defined in a .t2i file the tmsh2iapp tool automatically generates an additional iApp parameter to indicate the BIG-IPs host names
+#                                      where the values are going to be applied following the same order. This automatic variable is called local__bigip_names.
+#
+#                                      Following the above example if we apply the next values (ie: in the GUI):
+#
+#                                      local__bigip_names: bigip1 bigip2
+#                                      local__self_vxlan: 1.2.3.4/24 1.2.3.5/24
+#
+#                                      Then bigip1 will apply the value 1.2.3.4/24 and bigip2 will apply the value 1.2.3.5/24.
+#
+#                                      Note that the names of the BIG-IP's are matched with the beginning of the BIG-IP's FQDN's. It is not necessary to specify the full name, 
+#                                      it can be "bigip1.subdomain1 bigip1.subdomain2" or just "bigip1 bigip2" as shown in the example.
+#
+#                                      The values stored in the variables are defined as TCL lists, ie you can use the following formats when assigning the values for the different BIG-IPs
+#
+#                                      Exemple 1: value1 value2 value3 value4
+#                                      Example 2: {value1} {value2} {value3} {value4}
+#                                      Example 3: {some multi value1} {} {another multi value3} {and yet one more multi value4}
+#                  
+#                                      In other words, the two benefits of defining them as TCL lists allow for:
+#
+#                                      - multi-word values
+#                                      - empty values are possible too
+#
+#
+#
+# 2017/09/28 - u.alonsocamaro@f5.com - FIX: removed sort of vartypes and only sorted actual variable names.
+#
+#                                      This at random generated wrong iApps. ie: running the tmsh2iapp over the same .t2i file eventually generated different iApps.
+#
+#                                      Note: if your iApp was properly generated you should not worry about existing generated iApps.
+#
+# 2017/09/28 - u.alonsocamaro@f5.com - FIX: incremental loader: do not longer remove lines that contain a hash
 
-$tmsh2iapp_version= "20170802.2";
+
+$tmsh2iapp_version= "20170928.3";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -292,16 +362,16 @@ if (($ARGV[0] eq "system") && ($raw_content =~ /ltm pool/)) {
 
 
 # remove the attributes but not @service_folder
-$content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import)|\#)/, split(/\n/, $raw_content)));
+$content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import))/, split(/\n/, $raw_content)));
 
 # get the variables from the t2i file
-my @matches = uniq ( $content =~ /(__pm__.+?__|__dr__.+?__|__fwal__.+?__|__fwpl__.+?__|__urlcat_match__.+?_.+?__|__urlcat_nomatch__.+?_.+?__|__pool__.+?__|__.+?__)/g );
+my @matches = uniq ( $content =~ /(__pm__.+?__|__dr__.+?__|__fwal__.+?__|__fwpl__.+?__|__urlcat_match__.+?_.+?__|__urlcat_nomatch__.+?_.+?__|__pool__.+?__|__local__.+?__|__.+?__)/g );
 
 check_variable_names(\@matches);
     
 # we separate the items in arrays depending the type of variables. All have to be registered in the @vartypes array.
 
-my @variables= grep(!/^(__pm|__dr|__fwal|__fwpl|__app_service__|__urlcat_match__|__urlcat_nomatch__|__pool__)/, @matches);
+my @variables= grep(!/^(__pm|__dr|__fwal|__fwpl|__app_service__|__urlcat_match__|__urlcat_nomatch__|__pool__|__local__)/, @matches);
 my @pool_members= grep(/^__pm/, @matches);
 my @data_records= grep(/^__dr/, @matches);
 my @fw_address_list= grep(/^__fwal/, @matches);
@@ -310,9 +380,10 @@ my @urlcat_match_list= grep(/^__urlcat_match/, @matches);
 my @urlcat_nomatch_list= grep(/^__urlcat_nomatch/, @matches);
 my @iworkflow_variables= grep(/^__pool/, @matches); # __pool__addr__ and __pool__port__ are currently a constrain to allow the iApp to expose stats automatically to iWorkflow
 # check_iworkflow_variables(\@iworkflow_variables);
+my @localvars= grep(/^__local/, @matches);
 
-my @vartypes= (\@variables, \@pool_members, \@data_records, \@fw_address_list, \@fw_port_list, \@urlcat_match_list, \@urlcat_nomatch_list, \@iworkflow_variables);
-my @vartypes_desc= ("General variables", "Pool members", "Internal data-group records", "Firewall address lists", "Firewall port lists", "PEM URL match category lists", "PEM URL no match category lists", "iWorkflow VIP address and VIP port variables");
+my @vartypes= (\@variables, \@pool_members, \@data_records, \@fw_address_list, \@fw_port_list, \@urlcat_match_list, \@urlcat_nomatch_list, \@iworkflow_variables, \@localvars);
+my @vartypes_desc= ("General variables", "Pool members", "Internal data-group records", "Firewall address lists", "Firewall port lists", "PEM URL match category lists", "PEM URL no match category lists", "iWorkflow VIP address and VIP port variables", "Per BIG-IP local variables");
 
 my @import_file_types= ("apache-ssl-cert", "browser-capabilities-db", "dashboard-viewset", "data-group", "device-capabilities-db", "external-monitor", "ifile", "lwtunneltbl", "ssl-cert", "ssl-crl", "ssl-csr", "ssl-key", "asm-policy");
 my @import_perl_types= @import_file_types;
@@ -536,7 +607,7 @@ sub iapp_implementation_import {
     my $import_type;
     my $import_otype;
 
-    foreach $import_type (sort @import_perl_types) {
+    foreach $import_type (@import_perl_types) {
 	
 	foreach $var (sort @$import_type) {
 	    
@@ -648,6 +719,7 @@ sub iapp_implementation_config_load_section {
     }
 
     my $vars_instantiation= iapp_implementation_variables_instantiation();
+    $vars_instantiation.= iapp_implementation_local_variables_instantiation();
 
     my $txt = << "CFG";
 
@@ -938,6 +1010,61 @@ sub iapp_implementation_pem_urlcat_modify {
     return $tmsh_cmds;
 }
 
+sub iapp_implementation_local_variables_instantiation {
+    
+    
+    if ((scalar @localvars) == 0) {
+	return "";
+    }
+    
+    $tmsh_cmds= "\n\n";
+
+    $tmsh_cmds.= "                set this_bigip [ tmsh::list sys global-settings hostname ]\n";
+    $tmsh_cmds.= "                regexp -line \"hostname (.*)\" \$this_bigip x this_bigip\n";
+    $tmsh_cmds.= "                puts \"Found this BIG-IP is \$this_bigip\"\n";
+    $tmsh_cmds.= "                set index_bigip -1\n";
+    $tmsh_cmds.= "                set list_bigips [split [regexp -all -inline {\\S+} \$local__bigip_names]]\n";
+    $tmsh_cmds.= "                set i 0\n\n";
+    
+    $tmsh_cmds.= "                foreach bigip \$list_bigips {\n";
+    $tmsh_cmds.= "                   if {[regexp -nocase ^\$bigip \$this_bigip]} {\n";
+    # We do not break the foreach loop to catch possible errors and through a user friendly message
+    $tmsh_cmds.= "                      puts \"Matched \$bigip with \$this_bigip\ using index \$i\"\n";
+    $tmsh_cmds.= "                      if {\$index_bigip != -1} {\n";
+    $tmsh_cmds.= "                          set i_name [lindex \$i \$list_bigips]\n";
+    $tmsh_cmds.= "                          set index_name [lindex \$index_bigip \$list_bigips]\n";
+    $tmsh_cmds.= "                          error \"Several matches found for \$this_bigip with indexes \$index_bigip (\$index_name) and \$i (\$i_name)\"\n";
+    $tmsh_cmds.= "                      }\n";
+    $tmsh_cmds.= "                      set index_bigip \$i\n";
+    $tmsh_cmds.= "                   }\n";
+    $tmsh_cmds.= "                   incr i\n";
+    $tmsh_cmds.= "                }\n";
+    
+    $tmsh_cmds.= "                if {\$index_bigip == -1} {\n";
+    $tmsh_cmds.= "                   error \"Could not find \$this_bigip in list >\$local__bigip_names<\"\n";
+    $tmsh_cmds.= "                }\n\n";
+    
+    $tmsh_cmds.= "                set n_bigips [llength \$list_bigips]\n";
+    
+    foreach $lv (@localvars) {
+
+        $vname= $lv; # var name in the iapp script
+        $vname=~ s/__(.*)__/$1/;
+	
+	$tmsh_cmds.= "                set ll [llength \${::$vname}]\n";
+	
+        $tmsh_cmds.= "                if {\$ll != \$n_bigips} {\n";
+        $tmsh_cmds.= "                   error \"The number of values in the variable $vname (\$ll) is different than the number of BIG-IPs (\$n_bigips), variable value is >\${::$vname}<\"\n";
+        $tmsh_cmds.= "                }\n";
+        $tmsh_cmds.= "\n";
+        $tmsh_cmds.= "                set value [lindex \${::$vname} \$index_bigip]\n";
+	$tmsh_cmds.= "                puts \"Applying local value >\$value< for $lv\"\n";
+        $tmsh_cmds.= "                set cfg [string map \"$lv {\$value}\" \$cfg]\n";
+    }
+
+    return $tmsh_cmds;
+}
+
 sub iapp_implementation_disable_strict_updates {
     
     $tmsh_cmds= "\n\n";
@@ -978,7 +1105,7 @@ TXT
     
     ### variable definitions
 
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 	
 	@vt= @$vartype;
 	
@@ -995,6 +1122,10 @@ TXT
 	    
 	    $txt= $txt . "                section $vt_name {\n";
 
+            if ($vt_name eq "local") { # Special processing for local variables
+		$txt= $txt . "                        string bigip_names display \"xxlarge\"\n";
+            }
+  	    
 	    foreach $v (sort @$vartype) {
 
 		if (defined($apl{$v})) {
@@ -1027,10 +1158,10 @@ TXT
     
     $txt= $txt . "                text {\n";
     
-    $i= 0;
-    $vartype_plain= 1;
+    my $i= 0;
+    my $vartype_plain= 1;
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 
 	@vt= @$vartype;
 	
@@ -1044,8 +1175,12 @@ TXT
 	    } else {
 		$vt_name= "var"; # plain variables type
 	    }
-
+	    
 	    $txt= $txt . "\n                        $vt_name \"$vartypes_desc[$i]\"\n";
+
+            if ($vt_name eq "local") { # Special processing for local variables
+                $txt= $txt . "                        $vt_name.bigip_names \"List of all the BIG-IP names in the cluster\"\n";
+            }
 
 	    foreach $v (sort @$vartype) {
 
@@ -1192,7 +1327,18 @@ parameters:
     default: admin
 DEFAULT_PARAMS
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
+	
+	@vt= @$vartype; # Special handling for local variables
+	if (($#vt +1) > 0) { 
+	    $_= $vt[0];
+	    if (/^__local__/) {
+		
+	        $parameters= $parameters . "  " . local__bigip_names . ":\n";
+	        $parameters= $parameters . "  " . "  " . "type: string\n";
+		$parameters= $parameters . "  " . "  " . "label: List of all BIG-IP names in the cluster\n";
+            }
+	}
 	
 	foreach $v (sort @$vartype) {
 	    
@@ -1278,7 +1424,7 @@ sub heat_resources_iapp_variables {
     
     $vars_count= 0;
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 	
 	@vt= @$vartype;
 	
@@ -1295,8 +1441,16 @@ sub heat_resources_iapp_variables {
           params:
 VARIABLES
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 	
+ 	@vt= @$vartype; # Special handling for local variables
+	if (($#vt +1) > 0) { 
+	    $_= $vt[0];
+	    if (/^__local__/) {
+	        $section.= "             " . "_local__bigip_names_" . ":" . " { get_param: local__bigip_names }\n";
+            }
+	}
+
 	foreach $v (sort @$vartype) {
 	    $v_name= $v;
 	    $v_name=~ s/__(.*)__/$1/;
@@ -1324,7 +1478,20 @@ VARIABLES
     $vars_i= 1;
     $vartype_plain= 1;
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
+	
+ 	@vt= @$vartype; # Special handling for local variables
+	if (($#vt +1) > 0) { 
+	    
+	    $_= $vt[0];
+	    if (/^__local__/) {
+		
+	        $section.= "                \"name\": " . "\"local__bigip_names\",\n";
+	        $section.= "                \"encrypted\": \"no\",\n";
+	        $section.= "                \"value\": " . "\"_local__bigip_names_\"\n";
+                $section.= "              }, {\n";
+            }
+        }
 	
 	# we append a var__ prefix if it is plain var type
 	if ($vartype_plain == 1) {
@@ -1392,8 +1559,17 @@ DEFAULT_PARAMS
     
     my $params= $default_params;
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 	
+ 	@vt= @$vartype; # Special handling for local variables
+	if (($#vt +1) > 0) { 
+	    
+	    $_= $vt[0];
+	    if (/^__local__/) {
+		$params= $params . "  " . local__bigip_names . ":\n";
+            }
+	}
+
 	foreach $v (sort @$vartype) {
 	    
 	    $v_name= $v;
@@ -1476,7 +1652,7 @@ sub ansible_iapp_variables{
     
     $vars_count= 0;
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 	
 	@v= $vartype;
 	$vars_count+= $#v +1;
@@ -1493,7 +1669,17 @@ VARIABLES
 
     $vartype_plain= 1;
     
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
+	
+ 	@vt= @$vartype; # Special handling for local variables
+	if (($#vt +1) > 0) { 
+	    
+	    $_= $vt[0];
+	    if (/^__local__/) {
+		$section.= "            - name: \"local__bigip_names\"\n";
+		$section.= "              value: \"<fill me>\"\n";
+            }
+        }
 	
 	# we append a var__ prefix if it is plain var type
 	if ($vartype_plain == 1) {
@@ -1562,12 +1748,12 @@ sub iworkflow_json_apl {
     my $i= 0; # iterates on the JSON elements
     my $j= 0; # iterates on the variable type descriptions
 
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 
         @vt= @$vartype;
-
+	
         if (($#vt +1) > 0) {
-
+	    
             $_= $vt[0];
 
             # vt_name = variable type name
@@ -1589,7 +1775,7 @@ sub iworkflow_json_apl {
     my $vartype_plain= 1;
     $i= 0;
 
-    foreach $vartype (sort @vartypes) {
+    foreach $vartype (@vartypes) {
 
         @vt= @$vartype;
 
@@ -1604,6 +1790,18 @@ sub iworkflow_json_apl {
                 $vt_name= "var"; # plain variables type
             }
 
+	    $_= $vt_name; # Special handling for local variables
+	    if (/^local/) {
+                $json->{'vars'}->[$i]->{name}= "bigip_names";
+                $json->{'vars'}->[$i]->{isRequired}= "false";
+                $json->{'vars'}->[$i]->{description}= "List of all BIG-IP names in the cluster";
+                $json->{'vars'}->[$i]->{displayName}= "List of all BIG-IP names in the cluster";
+                $json->{'vars'}->[$i]->{section}= "local";
+
+                $i= $i +1;
+            }
+
+	    # This sort actually doesn't help because the order of the elements in the json is guaranteed
             foreach $v (sort @$vartype) {
                 
                 $vname= $v;
@@ -1724,7 +1922,7 @@ sub check_variable_names() {
 
 	print STDERR "Aborting: found variables that have hyphen in their name and iApps don't support these. Please rename the following variables: ";
 
-	foreach $v (sort @variables) {
+	foreach $v (@variables) {
 	    
 	    $_= $v;
 	    if (/-/) {
@@ -1750,7 +1948,7 @@ sub check_iworkflow_variables() {
 
     print STDERR "Aborting: when using iWorkflow's variables both __pool__port__ and __pool__addr__ must be defined. Showing the variables found: ";
 
-    foreach $i (sort @v) {	
+    foreach my $i (@v) {	
       	print STDERR "$i ";
     }
     
@@ -1843,7 +2041,7 @@ sub attribute_import_type {
     
     @$import_type= split /\s+/, $value; # we assign the values into an array of each type, ie: ssl_cert[0]= __var_name_1__ ...
     
-    foreach $var (sort @$import_type) {
+    foreach $var (@$import_type) {
 	
 	$imports{$var}= "true"; # This hash defines all variables that have an import regardless of the type
 	
