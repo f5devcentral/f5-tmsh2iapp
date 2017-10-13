@@ -228,9 +228,9 @@
 #                                      Note: if your iApp was properly generated you should not worry about existing generated iApps.
 #
 # 2017/09/28 - u.alonsocamaro@f5.com - FIX: incremental loader: do not longer remove lines that contain a hash
+# 2017/10/05 - u.alonsocamaro@f5.com - Implemented "nofolder" and "nofolder-disable-strict-updates" options
 
-
-$tmsh2iapp_version= "20170928.3";
+$tmsh2iapp_version= "20171005.2";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -272,6 +272,8 @@ if (($#ARGV == 1) &&
     ($ARGV[0] ne "service-disable-strict-updates") &&
     ($ARGV[0] ne "common") &&
     ($ARGV[0] ne "common-disable-strict-updates") &&
+    ($ARGV[0] ne "nofolder") &&
+    ($ARGV[0] ne "nofolder-disable-strict-updates") &&
     ($ARGV[0] ne "system") &&   
     ($ARGV[0] ne "heat-create") &&
     ($ARGV[0] ne "ansible-create") &&
@@ -311,6 +313,8 @@ if ($ARGV[0] eq "system") {
     $changepath='tmsh::cd "/"';
 } elsif (($ARGV[0] eq "common") || ($ARGV[0] eq "common-disable-strict-updates")) {
     $changepath='tmsh::cd "/Common"';
+} elsif (($ARGV[0] eq "nofolder") || ($ARGV[0] eq "nofolder-disable-strict-updates")) {
+    $changepath='tmsh::cd ".."';
 } else {
     $changepath= "";
 }
@@ -361,7 +365,7 @@ if (($ARGV[0] eq "system") && ($raw_content =~ /ltm pool/)) {
 }
 
 
-# remove the attributes but not @service_folder
+# remove the attributes but not @service_folder and @partition
 $content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import))/, split(/\n/, $raw_content)));
 
 # get the variables from the t2i file
@@ -400,7 +404,9 @@ foreach $al (@attribute_lines) {
 	$variable= $2;
 	$value= $3;
     } elsif (/\@service_folder/) {
-	# Do nothing, service_folder can be anywhere
+	# Do nothing, @service_folder can be anywhere
+    } elsif (/\@partition/) {
+	# Do nothing, @partition can be anywhere
     } else {
 	print STDERR "Aborting due to unexpected attribute line. The offending line is shown next: $al\n";
 	exit(1);
@@ -485,7 +491,7 @@ sub iapp_create {
     $iapp.= iapp_implementation_afm_port_list_modify();
     $iapp.= iapp_implementation_pem_urlcat_modify();
     
-    if (($ARGV[0] eq "service-disable-strict-updates") || ($ARGV[0] eq "common-disable-strict-updates")) {
+    if (($ARGV[0] eq "service-disable-strict-updates") || ($ARGV[0] eq "common-disable-strict-updates") || ($ARGV[0] eq "nofolder-disable-strict-updates")) {
 	
         $iapp.= iapp_implementation_disable_strict_updates();
     }
@@ -534,8 +540,15 @@ sub iapp_implementation_begin {
 
 		puts "Starting iApp \$tmsh::app_name.app generated with tmsh2iapp version $tmsh2iapp_version"
 
+                set partition "/[lindex [split [tmsh::pwd] /] 1]"
+
 IMPLEMENTATION_BEGIN
-    
+   
+    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition"';
+    $implementation_begin.= "\n";
+    $implementation_begin.= '                if { $partition == "/" } { puts "Warning: unexpected behaviour when @partition variable is to \"/\"" }';
+    $implementation_begin.= "\n";
+  
     return $implementation_begin;
 }
 
@@ -644,12 +657,11 @@ sub iapp_implementation_variables_instantiation {
     $map= "";
     
     # tmsh2iapp defined variables
-    
-    if (($ARGV[0] eq "service") || ($ARGV[0] eq "service-disable-strict-updates")) {
-	
-	$map.= "\@service_folder \$tmsh::app_name.app ";
-    }
-    
+
+    # Previously this variable was only valid when using service or service-disable-strict-updates
+    $map.= "\@service_folder \$tmsh::app_name.app ";
+    $map.= "\@partition \$partition ";
+
     # Plain iApp variables
     
     foreach $v (sort @variables) {
@@ -705,6 +717,7 @@ sub iapp_implementation_variables_instantiation {
     
     $retval= "";
     $retval= $retval . "                set cfg [string map \"$map\" \$cfg]\n"; 
+
     return $retval;
 }
 
@@ -755,15 +768,18 @@ sub iapp_implementation_create_ltm_policy {
     $policy=~ s/rules/rules replace-all-with/g;
     $policy=~ s/{(.*)}/$1/g;
 
-    # instantiate variables in the policy, this should be moved to a function eventually
+    ### instantiate variables in the policy, this should be moved to a function eventually
 
     my $map= "";
-    
-    if (($ARGV[0] eq "service") || ($ARGV[0] eq "service-disable-strict-updates")) {
-	
-	$map.= "\@service_folder \$tmsh::app_name.app ";
-    }
 
+    ## tmsh2iapp-own variables
+    
+    # Previously this variable was only valid when using service or service-disable-strict-updates
+    $map.= "\@service_folder \$tmsh::app_name.app ";
+    $map.= "\@partition \$partition ";
+
+    ## Plain variables
+    
     foreach $v (sort @variables) {
 	
 	$vname= $v;
@@ -1070,6 +1086,8 @@ sub iapp_implementation_disable_strict_updates {
     $tmsh_cmds= "\n\n";
     
     if ($ARGV[0] eq "common-disable-strict-updates") {
+	$service_path= "\$tmsh::app_name" . ".app" . "/" . "\$tmsh::app_name";
+    } elsif ($ARGV[0] eq "nofolder-disable-strict-updates") {
 	$service_path= "\$tmsh::app_name" . ".app" . "/" . "\$tmsh::app_name";
     } elsif ($ARGV[0] eq "service-disable-strict-updates") {
 	$service_path= "\$tmsh::app_name";	
@@ -2112,7 +2130,11 @@ sub print_synopsis {
 
 Synopsis:
 
-- iApp creation: tmsh2iapp.pl (service|service-disable-strict-updates|common|common-disable-strict-updates|system) <template file with .t2i extension>
+- iApp creation: 
+
+   tmsh2iapp.pl (service|nofolder|common) <template file with .t2i extension>
+   tmsh2iapp.pl (service|nofolder|common)-disable-strict-updates <template file with .t2i extension>
+   tmsh2iapp.pl system <template file with .t2i extension>
 
 - Heat template: tmsh2iapp.pl heat-create <template file with .t2i extension>
 
@@ -2157,10 +2179,17 @@ Details:
 
   + Parameters for iApp creation:
 
-       service - Indicates that on iApp instantiation the configuration will be contained in it's own iApp folder (most common case).
+       service - This is the most typical option. The configuration will be contained in it's own iApp folder in the partition where the iApp is instantiated.
        service-disable-strict-updates - Like "service" but allows the iApp generated configuration to be modified from outside the iApp.
-       common - Indicates that on iApp instantiation the configuration will be placed in the /Common folder.
+
+       common - The configuration will be placed in the /Common partition without an iApp folder.
        common-disable-strict-updates - Like "common" but allows the iApp generated configuration to be modified from outside the iApp.
+
+       nofolder - The configuration will be placed in the partition where the iApp is created without an iApp folder.
+       nofolder-disable-strict-updates - Like "nofolder" but allows the iApp generated configuration to be modified from outside the iApp.
+
+       Note that "nofolder" should have the same behaviour as the "common" when the iApp is instantiated in the /Common partition.
+
        system - Indicates that on iApp instantiation the configuration will be contained in the / folder.
 
   + Parameters for HEAT template creation:
