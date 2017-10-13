@@ -228,9 +228,10 @@
 #                                      Note: if your iApp was properly generated you should not worry about existing generated iApps.
 #
 # 2017/09/28 - u.alonsocamaro@f5.com - FIX: incremental loader: do not longer remove lines that contain a hash
-# 2017/10/05 - u.alonsocamaro@f5.com - Implemented "nofolder" and "nofolder-disable-strict-updates" options
+# 2017/10/13 - u.alonsocamaro@f5.com - Implemented "nofolder" and "nofolder-disable-strict-updates" options
+# 2017/10/13 - u.alonsocamaro@f5.com - Implemented @partition variable
 
-$tmsh2iapp_version= "20171005.2";
+$tmsh2iapp_version= "20171013.2";
 
 # use strict;
 binmode STDOUT, ":utf8";
