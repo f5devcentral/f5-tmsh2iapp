@@ -20,6 +20,7 @@ but some fluency in tmsh syntax is recommended.
 * Supports LTM policies
 * It has been used with LTM, AFM and PEM modules. ASM support is in the works.
 * Multi-tenancy: It has been used with route-domains and partitions.
+* Allows easy creation of iApps that contain base configurations that are not sync'ed but require per BIG-IP variables
 * It allows importing (from external files) the following configuration objects:
     * apache-ssl-cert          SSL certificates management
     * browser-capabilities-db  browser capabilities DB file management
