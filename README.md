@@ -19,8 +19,8 @@ but some fluency in tmsh syntax is recommended.
 * It is not BIG-IP version specific but it is being tested with BIG-IP 11.6-13.0
 * Supports LTM policies
 * It has been used with **LTM, APM, AFM and PEM modules**. ASM support is in the works.
-* Multi-tenancy: It has been used with route-domains and partitions.
-* Allows easy creation of iApps that contain base configurations that are not sync'ed but require per BIG-IP variables
+* Supports route-domains and partitions
+* Allows iApps that contain base configurations (self-IPs, VLANs, etc...) that can be deployed in a BIG-IP cluster and config-sync'ed assigning per-BIG-IP variables on instantiation.
 * It allows importing (from external files) the following configuration objects:
     * apache-ssl-cert          SSL certificates management
     * browser-capabilities-db  browser capabilities DB file management
