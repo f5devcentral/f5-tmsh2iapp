@@ -20,7 +20,7 @@ but some fluency in tmsh syntax is recommended.
 * Supports LTM policies
 * It has been used with **LTM, APM, AFM and PEM modules**. ASM support is in the works.
 * Supports route-domains and partitions
-* Allows iApps that contain base configurations (self-IPs, VLANs, etc...) that can be deployed in a BIG-IP cluster and config-sync'ed assigning per-BIG-IP variables on instantiation.
+* Can easily create iApps that contain base configurations (self-IPs, VLANs, etc...) that can be deployed in a BIG-IP cluster and config-sync'ed assigning per-BIG-IP values appropiately.
 * It allows importing (from external files) the following configuration objects:
     * apache-ssl-cert          SSL certificates management
     * browser-capabilities-db  browser capabilities DB file management
