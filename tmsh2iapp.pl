@@ -542,10 +542,14 @@ sub iapp_implementation_begin {
 		puts "Starting iApp \$tmsh::app_name.app generated with tmsh2iapp version $tmsh2iapp_version"
 
                 set partition "/[lindex [split [tmsh::pwd] /] 1]"
+                set partition_name "[lindex [split [tmsh::pwd] /] 1]"
+
+                set obj [tmsh::get_config auth partition \$partition_name default-route-domain]
+                set routedomainid [tmsh::get_field_value [lindex \$obj 0] default-route-domain]
 
 IMPLEMENTATION_BEGIN
    
-    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition"';
+    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition with default RD%$routedomainid"';
     $implementation_begin.= "\n";
     $implementation_begin.= '                if { $partition == "/" } { puts "Warning: unexpected behaviour when @partition variable is to \"/\"" }';
     $implementation_begin.= "\n";
@@ -873,7 +877,11 @@ sub iapp_implementation_pool_members_modify {
 	$vname_properties= $vname . "_properties";
 	
 	$tmsh_cmds.= "                if {([info exists {::$vname}]) && ([string length \${::$vname}] > 0)} {\n";
-	$tmsh_cmds.= "                   set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	$tmsh_cmds.= "                   if {\$routedomainid != 0} {\n";
+	$tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { [string map \": %\${routedomainid}:\" \${::$vname}] } }\"\n";
+	$tmsh_cmds.= "                   } else {\n";
+	$tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	$tmsh_cmds.= "                   }\n";
 	$tmsh_cmds.= "                   puts \"\$cmd\"\n";
 	$tmsh_cmds.= "                   eval \$cmd\n";
         $tmsh_cmds.= "                   if {([info exists {::$vname_properties}]) && ([string length \${::$vname_properties}] > 0)} {\n";
