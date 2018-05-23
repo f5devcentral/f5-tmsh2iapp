@@ -230,6 +230,9 @@
 # 2017/09/28 - u.alonsocamaro@f5.com - FIX: incremental loader: do not longer remove lines that contain a hash
 # 2017/10/13 - u.alonsocamaro@f5.com - Implemented "nofolder" and "nofolder-disable-strict-updates" options
 # 2017/10/13 - u.alonsocamaro@f5.com - Implemented @partition variable
+# 2018/02/28 - cstubbs@gmail.com - Detect default route domain for deployment partition
+# 2018/02/28 - cstubbs@gmail.com - Improved auto-creation of nodes by way of pool members within partitions that have non-default (non-zero) route domain
+# 2018/03/01 - cstubbs@gmail.com - Implemented @routedomainid variable
 
 $tmsh2iapp_version= "20171013.2";
 
@@ -366,7 +369,7 @@ if (($ARGV[0] eq "system") && ($raw_content =~ /ltm pool/)) {
 }
 
 
-# remove the attributes but not @service_folder and @partition
+# remove the attributes but not @service_folder / @partition / @routedomainid
 $content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import))/, split(/\n/, $raw_content)));
 
 # get the variables from the t2i file
@@ -408,6 +411,8 @@ foreach $al (@attribute_lines) {
 	# Do nothing, @service_folder can be anywhere
     } elsif (/\@partition/) {
 	# Do nothing, @partition can be anywhere
+    } elsif (/\@routedomainid/) {
+      # Do nothing, @routedomainid can be anywhere
     } else {
 	print STDERR "Aborting due to unexpected attribute line. The offending line is shown next: $al\n";
 	exit(1);
@@ -542,10 +547,14 @@ sub iapp_implementation_begin {
 		puts "Starting iApp \$tmsh::app_name.app generated with tmsh2iapp version $tmsh2iapp_version"
 
                 set partition "/[lindex [split [tmsh::pwd] /] 1]"
+                set partition_name "[lindex [split [tmsh::pwd] /] 1]"
+
+                set obj [tmsh::get_config auth partition \$partition_name default-route-domain]
+                set routedomainid [tmsh::get_field_value [lindex \$obj 0] default-route-domain]
 
 IMPLEMENTATION_BEGIN
    
-    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition"';
+    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition with default RD%$routedomainid"';
     $implementation_begin.= "\n";
     $implementation_begin.= '                if { $partition == "/" } { puts "Warning: unexpected behaviour when @partition variable is to \"/\"" }';
     $implementation_begin.= "\n";
@@ -662,6 +671,7 @@ sub iapp_implementation_variables_instantiation {
     # Previously this variable was only valid when using service or service-disable-strict-updates
     $map.= "\@service_folder \$tmsh::app_name.app ";
     $map.= "\@partition \$partition ";
+    $map.= "\@routedomainid \$routedomainid ";
 
     # Plain iApp variables
     
@@ -778,6 +788,7 @@ sub iapp_implementation_create_ltm_policy {
     # Previously this variable was only valid when using service or service-disable-strict-updates
     $map.= "\@service_folder \$tmsh::app_name.app ";
     $map.= "\@partition \$partition ";
+    $map.= "\@routedomainid \$routedomainid ";
 
     ## Plain variables
     
@@ -873,7 +884,11 @@ sub iapp_implementation_pool_members_modify {
 	$vname_properties= $vname . "_properties";
 	
 	$tmsh_cmds.= "                if {([info exists {::$vname}]) && ([string length \${::$vname}] > 0)} {\n";
-	$tmsh_cmds.= "                   set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	$tmsh_cmds.= "                   if {\$routedomainid != 0} {\n";
+	$tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { [string map \": %\${routedomainid}:\" \${::$vname}] } }\"\n";
+	$tmsh_cmds.= "                   } else {\n";
+	$tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	$tmsh_cmds.= "                   }\n";
 	$tmsh_cmds.= "                   puts \"\$cmd\"\n";
 	$tmsh_cmds.= "                   eval \$cmd\n";
         $tmsh_cmds.= "                   if {([info exists {::$vname_properties}]) && ([string length \${::$vname_properties}] > 0)} {\n";
