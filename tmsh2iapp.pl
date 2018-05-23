@@ -84,7 +84,7 @@
 #  @iapp(unsupported-bigip-versions): ["11.6.1", "12.0.1"]
 #
 # There is currently no support for signing or creating a checksum iApps.
-#u  
+#  
 # 2017/06/15 - u.alonsocamaro@f5.com - Implementation of iworkflow-json-apl and iworkflow-template-import
 # 2017/06/15 - u.alonsocamaro@f5.com - version and usage options
 # 2017/06/22 - u.alonsocamaro@f5.com - Support for iWorkflow variables __pool__addr__ and __pool__port__ for automatic statistics. See  https://devcentral.f5.com/wiki/iWorkflow.iWorkflowOpsGuide_v22_7.ashx
@@ -233,8 +233,20 @@
 # 2018/02/28 - cstubbs@gmail.com - Detect default route domain for deployment partition
 # 2018/02/28 - cstubbs@gmail.com - Improved auto-creation of nodes by way of pool members within partitions that have non-default (non-zero) route domain
 # 2018/03/01 - cstubbs@gmail.com - Implemented @routedomainid variable
+# 2018/05/23 - u.alonsocamaro@f5.com - Renamed @routedomainid as @defaultrd
+# 2018/05/23 - u.alonsocamaro@f5.com - Added @option attribute for generic options. 
+#
+# The first option added is "default-route-domain" which can be true (default) or false. This allows disabling the new default behaviour of using partition's
+# default-route-domain when creating pool members. @defaultrd is in any case defined.
+#
+# Example usage:
+#
+#  @option(default-route-domain): "false"
+#
+# 2018/05/23 - u.alonsocamaro@f5.com - Applying @defaultrd to pool members is not performed when (1) @defaultrd is 0 or (new condition) their addresses already contain %
+#
 
-$tmsh2iapp_version= "20171013.2";
+$tmsh2iapp_version= "20180523.1";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -247,6 +259,7 @@ $debug= 0;
 
 sub check_iworkflow_variables;
 sub check_variable_names;
+sub attribute_option_default_route_domain;
 sub attribute_import_type;
 
 $cfgdir="/var/tmp";
@@ -332,7 +345,7 @@ if (! ($t2i=~ m/\.t2i$/)) {
     exit 1;
 }
 
-###
+### Variables that must exist
 
 $iapp_name= basename($t2i);
 # iApp name is basename without extension .t2i
@@ -353,6 +366,9 @@ $apl_filename=~ s/\.t2i$/\.apl.json/;
 $import_filename= $t2i;
 $import_filename=~ s/\.t2i$/\.import.json/;
 
+# @option default settings
+$option{"default-route-domain"}= "true";
+
 ###
 
 open TMPL, "<", $t2i
@@ -369,8 +385,8 @@ if (($ARGV[0] eq "system") && ($raw_content =~ /ltm pool/)) {
 }
 
 
-# remove the attributes but not @service_folder / @partition / @routedomainid
-$content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import))/, split(/\n/, $raw_content)));
+# remove the attributes but not @service_folder / @partition / @defaultrd
+$content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import|option))/, split(/\n/, $raw_content)));
 
 # get the variables from the t2i file
 my @matches = uniq ( $content =~ /(__pm__.+?__|__dr__.+?__|__fwal__.+?__|__fwpl__.+?__|__urlcat_match__.+?_.+?__|__urlcat_nomatch__.+?_.+?__|__pool__.+?__|__local__.+?__|__.+?__)/g );
@@ -403,7 +419,7 @@ foreach $al (@attribute_lines) {
     
     $_= $al;
     
-    if (/@(label|apl|properties|iapp|import)\((.*?)\):\s*(.*)/) {
+    if (/@(label|apl|properties|iapp|import|option)\((.*?)\):\s*(.*)/) {
 	$attribute= $1;
 	$variable= $2;
 	$value= $3;
@@ -411,8 +427,8 @@ foreach $al (@attribute_lines) {
 	# Do nothing, @service_folder can be anywhere
     } elsif (/\@partition/) {
 	# Do nothing, @partition can be anywhere
-    } elsif (/\@routedomainid/) {
-      # Do nothing, @routedomainid can be anywhere
+    } elsif (/\@defaultrd/) {
+      # Do nothing, @defaultrd can be anywhere
     } else {
 	print STDERR "Aborting due to unexpected attribute line. The offending line is shown next: $al\n";
 	exit(1);
@@ -426,7 +442,13 @@ foreach $al (@attribute_lines) {
         check_legacy_properties_usage($variable, $value);
 	$properties{$variable}= $value;
     } elsif ($attribute eq "iapp") {
+
 	$iapp{$variable}= $value;
+
+    } elsif ($attribute eq "option") {
+
+        attribute_option_default_route_domain($value);
+
     } elsif ($attribute eq "import") {
 
 	$arg= $variable; # rename it for clarity: in the case of @import the argument of is not a variable name
@@ -540,7 +562,7 @@ HEAD
 
 sub iapp_implementation_begin {
     
-    my $implementation_begin= << "IMPLEMENTATION_BEGIN";
+    my $implementation_begin= << "IMPLEMENTATION_BEGIN_A";
 
             implementation {
 
@@ -549,16 +571,22 @@ sub iapp_implementation_begin {
                 set partition "/[lindex [split [tmsh::pwd] /] 1]"
                 set partition_name "[lindex [split [tmsh::pwd] /] 1]"
 
-                set obj [tmsh::get_config auth partition \$partition_name default-route-domain]
-                set routedomainid [tmsh::get_field_value [lindex \$obj 0] default-route-domain]
 
-IMPLEMENTATION_BEGIN
+IMPLEMENTATION_BEGIN_A
    
-    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition with default RD%$routedomainid"';
+    $implementation_begin.= '                if { $partition == "/" } { error "Unexpected value for @partition \"/\"" }';
     $implementation_begin.= "\n";
-    $implementation_begin.= '                if { $partition == "/" } { puts "Warning: unexpected behaviour when @partition variable is to \"/\"" }';
-    $implementation_begin.= "\n";
+    
+    $implementation_begin.= << "IMPLEMENTATION_BEGIN_B";
+
+                set obj [tmsh::get_config auth partition \$partition_name default-route-domain]
+                set defaultrd [tmsh::get_field_value [lindex \$obj 0] default-route-domain]
   
+IMPLEMENTATION_BEGIN_B
+
+    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition, @defaultrd is $defaultrd"';
+    $implementation_begin.= "\n";
+    
     return $implementation_begin;
 }
 
@@ -671,7 +699,7 @@ sub iapp_implementation_variables_instantiation {
     # Previously this variable was only valid when using service or service-disable-strict-updates
     $map.= "\@service_folder \$tmsh::app_name.app ";
     $map.= "\@partition \$partition ";
-    $map.= "\@routedomainid \$routedomainid ";
+    $map.= "\@defaultrd \$defaultrd ";
 
     # Plain iApp variables
     
@@ -788,7 +816,7 @@ sub iapp_implementation_create_ltm_policy {
     # Previously this variable was only valid when using service or service-disable-strict-updates
     $map.= "\@service_folder \$tmsh::app_name.app ";
     $map.= "\@partition \$partition ";
-    $map.= "\@routedomainid \$routedomainid ";
+    $map.= "\@defaultrd \$defaultrd ";
 
     ## Plain variables
     
@@ -884,11 +912,18 @@ sub iapp_implementation_pool_members_modify {
 	$vname_properties= $vname . "_properties";
 	
 	$tmsh_cmds.= "                if {([info exists {::$vname}]) && ([string length \${::$vname}] > 0)} {\n";
-	$tmsh_cmds.= "                   if {\$routedomainid != 0} {\n";
-	$tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { [string map \": %\${routedomainid}:\" \${::$vname}] } }\"\n";
-	$tmsh_cmds.= "                   } else {\n";
-	$tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
-	$tmsh_cmds.= "                   }\n";
+
+	if ($option{"default-route-domain"} eq "true") {
+	    
+	    $tmsh_cmds.= "                   if {(\$defaultrd != 0) && ([string first \"%\" \${::$vname}] == -1)} {\n";
+	    $tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { [string map \": %\${defaultrd}:\" \${::$vname}] } }\"\n";
+	    $tmsh_cmds.= "                   } else {\n";
+	    $tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	    $tmsh_cmds.= "                   }\n";
+	} else {
+	    $tmsh_cmds.= "                   set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	}
+		
 	$tmsh_cmds.= "                   puts \"\$cmd\"\n";
 	$tmsh_cmds.= "                   eval \$cmd\n";
         $tmsh_cmds.= "                   if {([info exists {::$vname_properties}]) && ([string length \${::$vname_properties}] > 0)} {\n";
@@ -1620,7 +1655,7 @@ DEFAULT_PARAMS
 
 	    if (defined($imports{$v})) { # Special processing for imported objects
 		$v_name_import= $v_name . "_import";
-		$params= $params . "  " . $v_name_import . ":\n";
+a		$params= $params . "  " . $v_name_import . ":\n";
             }
 
 	    
@@ -2049,6 +2084,21 @@ sub diff_snapshots {
     close OUTPUT;
 
     print "Written the resulting baseline file to $output\n";
+}
+
+####################################################################################
+# @option(default-route-domain) processing
+
+sub attribute_option_default_route_domain {
+    
+    my $value= $_[0];
+
+    if (($value ne "true") && ($value ne "false")) {
+	print STDERR "Aborting due to \@option(default-route-domain) is not either \"true\" or \"false\". Value found is $value\n";
+	exit(1);
+    }
+
+    $option{"default-route-domain"}= $value;
 }
 
 ####################################################################################
