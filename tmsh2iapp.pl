@@ -244,9 +244,10 @@
 #  @option(default-route-domain): "false"
 #
 # 2018/05/23 - u.alonsocamaro@f5.com - Applying @defaultrd to pool members is not performed when (1) @defaultrd is 0 or (new condition) their addresses already contain %
-#
+# 2018/05/23 - u.alonsocamaro@f5.com - Renamed ansible-create to ansible-playbook
+# 2018/05/23 - u.alonsocamaro@f5.com - Implemented ansible-role
 
-$tmsh2iapp_version= "20180523.1";
+$tmsh2iapp_version= "20180523.2";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -293,7 +294,8 @@ if (($#ARGV == 1) &&
     ($ARGV[0] ne "nofolder-disable-strict-updates") &&
     ($ARGV[0] ne "system") &&   
     ($ARGV[0] ne "heat-create") &&
-    ($ARGV[0] ne "ansible-create") &&
+    ($ARGV[0] ne "ansible-playbook") &&
+    ($ARGV[0] ne "ansible-role") &&
     ($ARGV[0] ne "iworkflow-json-apl") &&
     ($ARGV[0] ne "iworkflow-template-import") &&
     ($ARGV[0] ne "snapshot-create")) {
@@ -475,9 +477,13 @@ if ($ARGV[0] eq "heat-create") {
     
     heat_create();
     
-} elsif ($ARGV[0] eq "ansible-create") {
+} elsif ($ARGV[0] eq "ansible-playbook") {
     
-    ansible_create();
+    ansible_playbook();
+    
+} elsif ($ARGV[0] eq "ansible-role") {
+    
+    ansible_role();
     
 } elsif ($ARGV[0] eq "iworkflow-json-apl") {
     
@@ -1666,9 +1672,9 @@ a		$params= $params . "  " . $v_name_import . ":\n";
 }
 
 
-### The next functions are for the ansible-create option
+### The next functions are for the ansible-playbook and ansible-role options
 
-sub ansible_create {
+sub ansible_playbook {
     
     # Ansible output file
     $ansible_filename= $t2i;
@@ -1677,7 +1683,7 @@ sub ansible_create {
     open ANSIBLE, ">", $ansible_filename
         or die "Can't open file where the Ansible playbook would be written ($ansible_filename): $!";
     
-    print ANSIBLE ansible_head();
+    print ANSIBLE ansible_playbook_head();
     print ANSIBLE ansible_iapp_variables();
     
     close ANSIBLE
@@ -1686,7 +1692,7 @@ sub ansible_create {
     print "Written the resulting Ansible playbook $ansible_filename\n";
 }
 
-sub ansible_head {
+sub ansible_playbook_head {
     
     my $head = << "HEAD";
 
@@ -1717,9 +1723,102 @@ HEAD
     return $head;
 }
 
-sub ansible_iapp_variables{
+sub ansible_role_print {
     
-    $vars_count= 0;
+    my $role= << "ROLE1";
+
+---
+
+
+## Deploy section
+
+- name: Add to the BIG-IP library the iApp file $iapp_name.tmpl
+  delegate_to: localhost
+  bigip_iapp_template:
+    content: "{{ lookup('template', '$iapp_name.tmpl') }}"
+    # force: <true|false>
+    server: "{{ bigip }}"
+    user: "{{ bigip_user }}"
+    password: "{{ bigip_password }}"
+    state: "present"
+  tags:
+    - add
+
+- name: Deploy the iApp $iapp_name
+  delegate_to: localhost
+  bigip_iapp_service:
+    name: "{{ iapp_service_name }}"
+    template: $iapp_name
+    force: true
+    server: "{{ bigip }}"
+    state: "present"
+ROLE1
+
+    $role.= ansible_iapp_variables();
+
+    $role.= << "ROLE2";
+  tags:
+    - add
+ROLE2
+
+    $role.= << "ROLE3";
+
+### Undeploy section
+
+- name: Undeploy the iApp $iapp_name
+  delegate_to: localhost
+  bigip_iapp_service:
+    name: "{{ iapp_service_name }}"
+    template: $iapp_name
+    force: true
+    server: "{{ bigip }}"
+    state: "absent"
+  tags:
+    - del
+
+- name: Delete from BIG-IP the iApp file $iapp_name.tmpl
+  delegate_to: localhost
+  bigip_iapp_template:
+    content: "{{ lookup('template', '$iapp_name.tmpl') }}"
+    force: true
+    server: "{{ bigip }}"
+    user: "{{ bigip_user }}"
+    password: "{{ bigip_password }}"
+    state: "absent"
+  register: result
+  failed_when:
+    - not result|success
+    - "'referenced by one or more applications' not in result.msg"
+  tags:
+    - del
+
+ROLE3
+    
+    return $role;
+}
+
+sub ansible_iapp_variables_value{
+    
+    my $variable= $_[0];
+    
+    if ($ARGV[0] eq "ansible-role") {
+	return "\"{{ $variable }}\"";
+    }
+    
+    return "\"<fill me>\"";
+}
+
+sub ansible_iapp_variables{
+
+    if ($ARGV[0] eq "ansible-playbook") {
+	# Additional space identation
+	$sp= "   ";
+    } else {
+	$sp= "";
+    }
+    
+    my $vars_count= 0;
+    my $value;
     
     foreach $vartype (@vartypes) {
 	
@@ -1732,8 +1831,8 @@ sub ansible_iapp_variables{
     }
     
     my $section= << "VARIABLES";
-       parameters:
-         variables:
+$sp    parameters:
+$sp      variables:
 VARIABLES
 
     $vartype_plain= 1;
@@ -1745,8 +1844,9 @@ VARIABLES
 	    
 	    $_= $vt[0];
 	    if (/^__local__/) {
-		$section.= "            - name: \"local__bigip_names\"\n";
-		$section.= "              value: \"<fill me>\"\n";
+		$section.= "$sp         - name: \"local__bigip_names\"\n";
+		$value= ansible_iapp_variables_value("local__bigip_names");
+		$section.= "$sp           value: $value\n";
             }
         }
 	
@@ -1764,21 +1864,24 @@ VARIABLES
 	    $v_name=~ s/__(.*)__/$1/;
 	    $v_name= $prefix . $v_name;
 	    
-	    $section.= "            - name: \"$v_name\"\n";
-	    $section.= "              value: \"<fill me>\"\n";
+	    $section.= "$sp         - name: \"$v_name\"\n";
+	    $value= ansible_iapp_variables_value($v_name);
+	    $section.= "$sp           value: $value\n";
 	    
             $_= $v_name;
             if (/^pm__/) { # Special handling for pool members
 		
 		$v_name_properties= $v_name . "_properties";
-		$section.= "            - name: \"$v_name_properties\"\n";
-		$section.= "              value: \"<fill me>\"\n";
+		$section.= "$sp         - name: \"$v_name_properties\"\n";
+		$value= ansible_iapp_variables_value($v_name_properties);
+		$section.= "$sp           value: $value\n";
             }
 
 	    if (defined($imports{$v})) { # Special processing for imported objects
 		$v_name_import= $v_name . "_import";
-		$section.= "            - name: \"$v_name_import\"\n";
-		$section.= "              value: \"<fill me>\"\n";
+		$section.= "$sp         - name: \"$v_name_import\"\n";
+		$value= ansible_iapp_variables_value($v_name_import);
+		$section.= "$sp           value: $value\n";
             }
 	    
 	}
@@ -1786,6 +1889,32 @@ VARIABLES
     
     return $section;
 }
+
+sub ansible_role {
+    
+    $ansible_directory= "roles" . "/" . $iapp_name . "/" . "tasks";
+    $ansible_filename= $ansible_directory . "/" . "main.yaml";
+
+    system("mkdir -p $ansible_directory");
+    
+    if ( $? == -1 ) {
+	die "Error while trying to create directory for role $ansible_directory: $!";
+    }
+    
+    open ANSIBLE, ">", $ansible_filename
+        or die "Can't open file for the Ansible role would be written ($ansible_filename): $!";
+    
+    print ANSIBLE ansible_role_print();
+    
+    close ANSIBLE
+        or die "Couldn't close the file for the Ansible role ($ansible_filename): $!";
+    
+    print "Written the resulting Ansible playbook $ansible_filename\n\n";
+
+    print "Don't forget to copy the iApp template $iapp_name.tmpl into the $iapp_name directory\n\n";
+    
+}
+
 
 ### The next functions are for the iworkflow-json-apl option
 
@@ -2204,7 +2333,9 @@ Synopsis:
 
 - Heat template: tmsh2iapp.pl heat-create <template file with .t2i extension>
 
-- Ansible playbook: tmsh2iapp.pl ansible-create <template file with .t2i extension>
+- Ansible playbook: tmsh2iapp.pl ansible-playbook <template file with .t2i extension>
+
+- Ansible role: tmsh2iapp.pl ansible-role <template file with .t2i extension>
 
 - iWorkflow JSON files: tmsh2iapp.pl (iworkflow-template-import|iworkflow-json-apl) <template file with .t2i extension>
 
@@ -2264,7 +2395,8 @@ Details:
 
   + Parameters for Ansible playbook creation:
 
-       ansible-create - Creates a template Ansible playbook (.yaml) to ease deploying the iApp with Ansible.
+       ansible-playbook - Creates a template Ansible playbook file to ease deploying the iApp.
+       ansible-role - Creates a template Ansible role directory alongside the iApp to ease deploying the iApp.
 
   + Parameters for iWorkflow:
 
