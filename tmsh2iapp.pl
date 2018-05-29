@@ -246,8 +246,15 @@
 # 2018/05/23 - u.alonsocamaro@f5.com - Applying @defaultrd to pool members is not performed when (1) @defaultrd is 0 or (new condition) their addresses already contain %
 # 2018/05/23 - u.alonsocamaro@f5.com - Renamed ansible-create to ansible-playbook
 # 2018/05/23 - u.alonsocamaro@f5.com - Implemented ansible-role
+# 2018/05/24 - u.alonsocamaro@f5.com - FIX: $changepath is now only once at the top of the implementation
+# 2018/05/24 - u.alonsocamaro@f5.com - FIX: LTM policies are now implemented with "add" instead of "replace-all-with" allowing re-configuration without eliminating rules not added by this iApp
+# 2018/05/24 - u.alonsocamaro@f5.com - Added preliminary ILX workspace import support: @import(ilx-workspace): <ws-name> but not working yet
+# 2018/05/24 - u.alonsocamaro@f5.com - FIX: moved $changepath before imports
+# 2018/05/25 - u.alonsocamaro@f5.com - Added auto parameter to allow specifying the iApp type to be generated as @option(iapp-type) in the .t2i file
+# 2018/05/25 - u.alonsocamaro@f5.com - $changepath is now a function and some other small cleanups
+# 2018/05/28 - u.alonsocamaro@f5.com - Several small fixes
 
-$tmsh2iapp_version= "20180523.2";
+$tmsh2iapp_version= "20180528.1";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -261,6 +268,7 @@ $debug= 0;
 sub check_iworkflow_variables;
 sub check_variable_names;
 sub attribute_option_default_route_domain;
+sub attribute_option_iapp_type;
 sub attribute_import_type;
 
 $cfgdir="/var/tmp";
@@ -271,7 +279,7 @@ if ($#ARGV == -1) {
 }
 
 if ($#ARGV == 0) {
-    
+
     if ($ARGV[0] eq "version") {
 	print_version();
 	exit 0;
@@ -285,7 +293,9 @@ if ($#ARGV == 0) {
     }
 }
 
+
 if (($#ARGV == 1) &&
+    ($ARGV[0] ne "auto") && 
     ($ARGV[0] ne "service") && 
     ($ARGV[0] ne "service-disable-strict-updates") &&
     ($ARGV[0] ne "common") &&
@@ -328,15 +338,7 @@ if ($#ARGV >= 2) {
 
 ### From now on all the processing is for creating an output based on a .t2i file
 
-if ($ARGV[0] eq "system") {
-    $changepath='tmsh::cd "/"';
-} elsif (($ARGV[0] eq "common") || ($ARGV[0] eq "common-disable-strict-updates")) {
-    $changepath='tmsh::cd "/Common"';
-} elsif (($ARGV[0] eq "nofolder") || ($ARGV[0] eq "nofolder-disable-strict-updates")) {
-    $changepath='tmsh::cd ".."';
-} else {
-    $changepath= "";
-}
+###
 
 $t2i=$ARGV[1];
 
@@ -379,14 +381,6 @@ open TMPL, "<", $t2i
 my $raw_content = do { local $/; <TMPL> };
 close TMPL;
 
-# Sanity checks
-
-if (($ARGV[0] eq "system") && ($raw_content =~ /ltm pool/)) {
-    
-    print STDERR "Warning: pools should not be specified when the system option is used. This will trigger an error when assigning members to it\n";
-}
-
-
 # remove the attributes but not @service_folder / @partition / @defaultrd
 $content= join("\n", grep(!/^\s*(@(label|apl|properties|iapp|import|option))/, split(/\n/, $raw_content)));
 
@@ -411,14 +405,20 @@ my @localvars= grep(/^__local/, @matches);
 my @vartypes= (\@variables, \@pool_members, \@data_records, \@fw_address_list, \@fw_port_list, \@urlcat_match_list, \@urlcat_nomatch_list, \@iworkflow_variables, \@localvars);
 my @vartypes_desc= ("General variables", "Pool members", "Internal data-group records", "Firewall address lists", "Firewall port lists", "PEM URL match category lists", "PEM URL no match category lists", "iWorkflow VIP address and VIP port variables", "Per BIG-IP local variables");
 
-my @import_file_types= ("apache-ssl-cert", "browser-capabilities-db", "dashboard-viewset", "data-group", "device-capabilities-db", "external-monitor", "ifile", "lwtunneltbl", "ssl-cert", "ssl-crl", "ssl-csr", "ssl-key", "asm-policy");
+my @import_file_types= ("apache-ssl-cert", "browser-capabilities-db", "dashboard-viewset", "data-group", "device-capabilities-db", "external-monitor", "ifile", "lwtunneltbl", "ssl-cert", "ssl-crl", "ssl-csr", "ssl-key", "asm-policy", "ilx-workspace");
 my @import_perl_types= @import_file_types;
 
 # check if the template contains attributes, if so gather them...
 my @attribute_lines= grep /^\s*@/, split(/\n/, $raw_content);
 
 foreach $al (@attribute_lines) {
-    
+ 
+    $attribute= "";
+    $variable= "";
+    $value= "";
+ 
+    print STDERR "parsing: attribute line: $al\n" if ($debug);
+ 
     $_= $al;
     
     if (/@(label|apl|properties|iapp|import|option)\((.*?)\):\s*(.*)/) {
@@ -427,10 +427,13 @@ foreach $al (@attribute_lines) {
 	$value= $3;
     } elsif (/\@service_folder/) {
 	# Do nothing, @service_folder can be anywhere
+        next;
     } elsif (/\@partition/) {
 	# Do nothing, @partition can be anywhere
+        next;
     } elsif (/\@defaultrd/) {
-      # Do nothing, @defaultrd can be anywhere
+        # Do nothing, @defaultrd can be anywhere
+        next;
     } else {
 	print STDERR "Aborting due to unexpected attribute line. The offending line is shown next: $al\n";
 	exit(1);
@@ -449,8 +452,15 @@ foreach $al (@attribute_lines) {
 
     } elsif ($attribute eq "option") {
 
-        attribute_option_default_route_domain($value);
-
+        if ($variable eq "default-route-domain") {
+	    attribute_option_default_route_domain($value);
+	} elsif ($variable eq "iapp-type") {
+	    attribute_option_iapp_type($value);
+	} else {
+	    print STDERR "Aborting due to unknown \@option $variable\n";
+	    exit(1);
+	}
+	
     } elsif ($attribute eq "import") {
 
 	$arg= $variable; # rename it for clarity: in the case of @import the argument of is not a variable name
@@ -469,6 +479,18 @@ for my $i (0 .. $#import_file_types) { # the perl variables are the same as tmsh
     $import_perl_types[$i]=~ s/-/_/g;
 }
 
+# Sanity checks
+
+if (($ARGV[0] eq "system") && ($raw_content =~ /ltm pool/)) {
+    
+    print STDERR "Warning: pools should not be specified when the system option is used. This will trigger an error when assigning members to it\n";
+}
+
+if ($ARGV[0] eq "auto") {
+
+    print STDERR "Aborting: auto iapp type is being used in the command line but no valid \@option(iapp-type) found in the .t2i file\n";
+    exit(1);
+}
 
 ###################################################################################################
 # Command to execute on the .t2i file
@@ -515,8 +537,10 @@ sub iapp_create {
     $iapp= iapp_head();
     $iapp.= iapp_implementation_begin();
     $iapp.= iapp_implementation_procs();
-    $iapp.= iapp_implementation_import();
 
+    $iapp.= iapp_implementation_changepath();
+   
+    $iapp.= iapp_implementation_import();
     $iapp.= iapp_implementation_incremental_loader();
     
     $iapp.= iapp_implementation_pool_members_modify();
@@ -542,7 +566,7 @@ sub iapp_create {
         close IAPP
 	    or die "Couldn't close the file for the iApp ($iapp_filename): $!";
 	
-        print "Written the resulting iApp to $iapp_filename\n";
+        print "Written the resulting iApp of type $ARGV[0] to $iapp_filename\n";
 	
     } else {
 	
@@ -568,7 +592,7 @@ HEAD
 
 sub iapp_implementation_begin {
     
-    my $implementation_begin= << "IMPLEMENTATION_BEGIN_A";
+    my $implementation_begin= << "IMPLEMENTATION_BEGIN";
 
             implementation {
 
@@ -577,21 +601,17 @@ sub iapp_implementation_begin {
                 set partition "/[lindex [split [tmsh::pwd] /] 1]"
                 set partition_name "[lindex [split [tmsh::pwd] /] 1]"
 
-
-IMPLEMENTATION_BEGIN_A
-   
-    $implementation_begin.= '                if { $partition == "/" } { error "Unexpected value for @partition \"/\"" }';
-    $implementation_begin.= "\n";
-    
-    $implementation_begin.= << "IMPLEMENTATION_BEGIN_B";
-
-                set obj [tmsh::get_config auth partition \$partition_name default-route-domain]
-                set defaultrd [tmsh::get_field_value [lindex \$obj 0] default-route-domain]
+                if { \$partition == "/" } { 
+                   puts "Warning: behaviour not well defined when \@partition is \\"/\\"" 
+                   set defaultrd 0
+                } else {
+                   set obj [tmsh::get_config auth partition \$partition_name default-route-domain]
+                   set defaultrd [tmsh::get_field_value [lindex \$obj 0] default-route-domain]
+                }
   
-IMPLEMENTATION_BEGIN_B
+                puts "The iApp of type $ARGV[0] is being instantiated in \@partition \$partition, \@defaultrd is \$defaultrd";
 
-    $implementation_begin.= '                puts "The iApp is being instantiated in @partition $partition, @defaultrd is $defaultrd"';
-    $implementation_begin.= "\n";
+IMPLEMENTATION_BEGIN
     
     return $implementation_begin;
 }
@@ -652,10 +672,29 @@ IMPLEMENTATION_PROC_CURL_SAVE_FILE
     $check_import_type= "asm_policy"; # To avoid the following warning Name "main::asm_policy" used only once: possible typo at ./tmsh2iapp.pl line 477.
     if (@$check_import_type) {
 	
-	return $implementation_proc_debug . $implementation_proc_curl_save_file;
+	return $implementation_proc_debug . $implementation_proc_curl_save_file . "\n";
     }
     
-    return "";
+    return "\n";
+}
+
+sub iapp_implementation_changepath {
+
+    my $changepath= "                ";
+    
+    if ($ARGV[0] eq "system") {
+	$changepath.='tmsh::cd "/"';
+    } elsif (($ARGV[0] eq "common") || ($ARGV[0] eq "common-disable-strict-updates")) {
+	$changepath.='tmsh::cd "/Common"';
+    } elsif (($ARGV[0] eq "nofolder") || ($ARGV[0] eq "nofolder-disable-strict-updates")) {
+	$changepath.='tmsh::cd ".."';
+    } else {
+	$changepath= "";
+    }
+    
+    $changepath.= "\n\n";
+    
+    return $changepath;
 }
 
 sub iapp_implementation_import {
@@ -683,6 +722,10 @@ sub iapp_implementation_import {
 		$import.= "                curl_save_file \${::$url} $cfgdir/\${::$vname}.xml\n";
 		$import.= "                tmsh::load asm policy \${::$vname} file $cfgdir/\${::$vname}.xml overwrite\n";
 		$import.= "                tmsh::modify asm policy \${::$vname} active\n";
+
+            } elsif ($import_otype eq "ilx-workspace") {
+
+                $import.= "                tmsh::create ilx workspace \${::$vname} from-uri \${::$url}\n";
 
 	    } else {
 		$import.= "                tmsh::create sys file $import_otype \${::$vname} source-path \${::$url}\n";
@@ -790,7 +833,6 @@ CFG
                 puts -nonewline \$fileId \$cfg
                 close \$fileId
 
-                $changepath
                 tmsh::load sys config merge file $cfgdir/$cfgfile
 LOAD_CMD
 
@@ -806,11 +848,11 @@ sub iapp_implementation_create_ltm_policy {
     $policy=~ s/\s+/ /g;
     $policy=~ s/ltm policy ((\w+|-|_)+)/ltm policy $1 legacy/;
     
-    $policy=~ s/actions/actions replace-all-with/g;
-    $policy=~ s/controls/controls replace-all-with/g;
-    $policy=~ s/conditions/conditions replace-all-with/g;
-    $policy=~ s/requires/requires replace-all-with/g;
-    $policy=~ s/rules/rules replace-all-with/g;
+    $policy=~ s/actions/actions add/g;
+    $policy=~ s/controls/controls add/g;
+    $policy=~ s/conditions/conditions add/g;
+    $policy=~ s/requires/requires add/g;
+    $policy=~ s/rules/rules add/g;
     $policy=~ s/{(.*)}/$1/g;
 
     ### instantiate variables in the policy, this should be moved to a function eventually
@@ -851,7 +893,7 @@ sub iapp_implementation_incremental_loader {
     @lines= split /^/, $content;
     $remaining= $content;
     my $retval= "";
-    
+  
     $i= 0;
 
     while($i < scalar(@lines)) {
@@ -870,12 +912,14 @@ sub iapp_implementation_incremental_loader {
 	    print STDERR ">>> next_flat:\n", $next_flat, "\n" if ($debug);
 	    
 	    ($extracted, $remaining, $prefix)= extract_codeblock($next_flat, '{}', '^\s*ltm\s+policy\s+(\w+|-|_)+\s+');
-	    $policy= $prefix . $extracted;
 
 	    if (!defined($extracted)) {
 		print STDERR "Aborting: could not match a valid ltm policy starting with the line $lines[$i]";
+		print STDERR "parsing: next_flat is:\n>>>\n$next_flat\n<<<\n" if ($debug);
 		exit(0);
 	    }
+
+            $policy= $prefix . $extracted;
 	    
 	    print STDERR ">>> extracted:\n", $extracted, "\n" if ($debug);
 	    print STDERR ">>> remaining:\n", $remaining, "\n" if ($debug);
@@ -919,6 +963,10 @@ sub iapp_implementation_pool_members_modify {
 	
 	$tmsh_cmds.= "                if {([info exists {::$vname}]) && ([string length \${::$vname}] > 0)} {\n";
 
+        #it ($option{"nodes-in-common"} eq "true") {
+	#    
+        #}
+
 	if ($option{"default-route-domain"} eq "true") {
 	    
 	    $tmsh_cmds.= "                   if {(\$defaultrd != 0) && ([string first \"%\" \${::$vname}] == -1)} {\n";
@@ -958,7 +1006,7 @@ sub iapp_implementation_data_records_modify {
 	$vname= $dr; # var name in the iapp script
 	$vname=~ s/__(.*)__/$1/;
 	
-	$tmsh_cmds.= "                if {[string length \${::$vname}] > 0} {\n";
+	$tmsh_cmds.= "                if {[info exists {::$vname}] && [string length \${::$vname}] > 0} {\n";
         # This is curious... tmsh modify from the cli doesn't require the extra brackets embracing the records parameter
 	$tmsh_cmds.= "                   set cmd \"tmsh::modify ltm data-group internal $dname description $dname { records replace-all-with { \${::$vname} } }\"\n";
 	
@@ -1689,7 +1737,8 @@ sub ansible_playbook {
     close ANSIBLE
         or die "Couldn't close the file for the Ansible playbook ($ansible_filename): $!";
     
-    print "Written the resulting Ansible playbook $ansible_filename\n";
+    print "Written Ansible playbook $ansible_filename\n";
+
 }
 
 sub ansible_playbook_head {
@@ -1705,8 +1754,6 @@ sub ansible_playbook_head {
        content: "{{ lookup('template', '$iapp_name.tmpl') }}"
        # force: <true|false>
        server: <fill with the DNS name/IP of the target BIG-IP>
-       user: <fill with the appropiate admin user>
-       password: <fill with admin user's password>
        state: "present"
    - name: Deploy the iApp $iapp_name
      delegate_to: localhost
@@ -1715,8 +1762,6 @@ sub ansible_playbook_head {
        template: $iapp_name
        # force: <true|false>
        server: <fill with the DNS name/IP of the target BIG-IP>
-       user: <fill with the appropiate admin user>
-       password: <fill with admin user's password>
        state: "present"
 HEAD
     
@@ -1738,8 +1783,6 @@ sub ansible_role_print {
     content: "{{ lookup('template', '$iapp_name.tmpl') }}"
     # force: <true|false>
     server: "{{ bigip }}"
-    user: "{{ bigip_user }}"
-    password: "{{ bigip_password }}"
     state: "present"
   tags:
     - add
@@ -1782,8 +1825,6 @@ ROLE2
     content: "{{ lookup('template', '$iapp_name.tmpl') }}"
     force: true
     server: "{{ bigip }}"
-    user: "{{ bigip_user }}"
-    password: "{{ bigip_password }}"
     state: "absent"
   register: result
   failed_when:
@@ -1909,7 +1950,7 @@ sub ansible_role {
     close ANSIBLE
         or die "Couldn't close the file for the Ansible role ($ansible_filename): $!";
     
-    print "Written the resulting Ansible playbook $ansible_filename\n\n";
+    print "Written Ansible role $ansible_filename\n\n";
 
     print "Don't forget to copy the iApp template $iapp_name.tmpl into the $iapp_name directory\n\n";
     
@@ -2231,11 +2272,49 @@ sub attribute_option_default_route_domain {
 }
 
 ####################################################################################
+# @option(iapp-type) processing
+
+sub attribute_option_iapp_type {
+
+    my $value= $_[0];
+
+    if (($ARGV[0] eq "heat-create") ||
+	($ARGV[0] eq "ansible-playbook") ||
+	($ARGV[0] eq "ansible-role") ||
+	($ARGV[0] eq "iworkflow-json-apl") ||  
+	($ARGV[0] eq "iworkflow-template-import") ||
+	($ARGV[0] eq "snapshot-create") ||
+	($ARGV[0] eq "t2i-create")) {
+
+	return;
+    }
+
+    if (defined($option{"iapp-type"})) {
+	
+	print STDERR "Aborting due to \@option(iapp-type) has been specified more than once\n";
+	exit(1);
+    }
+
+    if ($ARGV[0] ne "auto") {
+
+	print STDERR "Notice: not using \@option(iapp-type): $value because iapp-type is being overridden in the command line\n";
+	return;
+    }
+
+    $ARGV[0]= $value;
+
+    # Checking of $value is done in the regular $ARGV[0] checking
+    $option{"iapp-type"}= $value;
+}
+
+####################################################################################
 # BIG-IP object import functions
 
 # Instantiates perl arrays for import types with the the iApp variables in their contents, one array per type
 
 sub attribute_import_type {
+
+    print STDERR "attribute_import_type($_[0], $_[1])\n" if ($debug);
 
     my $import_otype= $_[0]; # original type name
     my $import_type= $import_otype;
@@ -2255,7 +2334,7 @@ sub attribute_import_type {
     @$import_type= split /\s+/, $value; # we assign the values into an array of each type, ie: ssl_cert[0]= __var_name_1__ ...
     
     foreach $var (@$import_type) {
-	
+
 	$imports{$var}= "true"; # This hash defines all variables that have an import regardless of the type
 	
 	if (!grep(/^$var$/, @variables)) {
@@ -2327,6 +2406,7 @@ Synopsis:
 
 - iApp creation: 
 
+   tmsh2iapp.pl auto <template file with .t2i extension>
    tmsh2iapp.pl (service|nofolder|common) <template file with .t2i extension>
    tmsh2iapp.pl (service|nofolder|common)-disable-strict-updates <template file with .t2i extension>
    tmsh2iapp.pl system <template file with .t2i extension>
@@ -2375,6 +2455,8 @@ DESCRIPTION
 Details: 
 
   + Parameters for iApp creation:
+
+       auto - The type of iApp generated is indicated with an \@option(iapp-type) attribute in the .t2i file. Any of the options below is possible. ie: \@option(iapp-type): service
 
        service - This is the most typical option. The configuration will be contained in it's own iApp folder in the partition where the iApp is instantiated.
        service-disable-strict-updates - Like "service" but allows the iApp generated configuration to be modified from outside the iApp.
