@@ -253,8 +253,10 @@
 # 2018/05/25 - u.alonsocamaro@f5.com - Added auto parameter to allow specifying the iApp type to be generated as @option(iapp-type) in the .t2i file
 # 2018/05/25 - u.alonsocamaro@f5.com - $changepath is now a function and some other small cleanups
 # 2018/05/28 - u.alonsocamaro@f5.com - Several small fixes
+# 2018/05/30 - u.alonsocamaro@f5.com - @import(asm-policy) is now supported with upcoming BIG-IP v14 or using v13 + fixes for ID693694 and ID675232. 
+#                                      Note that to due to pending fix for ID721717 in order to allow iApp reconfiguration the iApp has to be created with -disable-strict-updates
 
-$tmsh2iapp_version= "20180528.1";
+$tmsh2iapp_version= "20180530.1";
 
 # use strict;
 binmode STDOUT, ":utf8";
