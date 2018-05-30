@@ -14,14 +14,14 @@ but some fluency in tmsh syntax is recommended.
 
 * Allows creating an iApp using a **declarative** tmsh-like syntax (these are called .t2i files)
 * Baseline .t2i files can be created easily with the BIG-IP GUI
-* Helps deploying the iApp by creating sample Ansible playbooks, Heat templates and iWorkflow JSON files
+* Helps deploying the iApp by creating sample Ansible roles & playbooks, Heat templates and iWorkflow JSON files
 * It can be used in any computer with perl installed -- including the BIG-IP
-* It is not BIG-IP version specific but it is being tested with BIG-IP 11.6-13.0
+* It is not BIG-IP version specific but it is being tested with BIG-IP 11.6-13.1
 * Supports LTM policies
-* It has been used with **LTM, APM, AFM and PEM modules**. It can use previously loaded ASM policies. Support for imporing ASM policies is in the works.
+* It has been used with **LTM, APM, AFM and PEM modules**. It can use previously loaded ASM policies. Support for importing ASM policies is in the works.
 * Supports route-domains and partitions
-* Can easily create iApps that contain base configurations (self-IPs, VLANs, etc...) that can be deployed in a BIG-IP cluster and config-sync'ed assigning per-BIG-IP values appropiately.
-* It allows importing (from external files) the following configuration objects:
+* Can easily create **iApps that contain base configurations (self-IPs, VLANs, etc...) that can be deployed in a BIG-IP cluster and config-sync'ed assigning per-BIG-IP values appropiately**.
+* It allows **importing (from external files) the following configuration objects**:
     * apache-ssl-cert          SSL certificates management
     * browser-capabilities-db  browser capabilities DB file management
     * dashboard-viewset
