@@ -255,8 +255,9 @@
 # 2018/05/28 - u.alonsocamaro@f5.com - Several small fixes
 # 2018/05/30 - u.alonsocamaro@f5.com - @import(asm-policy) is now supported with upcoming BIG-IP v14 or using v13 + fixes for ID693694 and ID675232. 
 #                                      Note that to due to pending fix for ID721717 in order to allow iApp reconfiguration the iApp has to be created with -disable-strict-updates
+# 2018/05/31 - u.alonsocamaro@f5.com - stray character in heat_parameters_file
 
-$tmsh2iapp_version= "20180530.1";
+$tmsh2iapp_version= "20180531.1";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -1711,7 +1712,7 @@ DEFAULT_PARAMS
 
 	    if (defined($imports{$v})) { # Special processing for imported objects
 		$v_name_import= $v_name . "_import";
-a		$params= $params . "  " . $v_name_import . ":\n";
+		$params= $params . "  " . $v_name_import . ":\n";
             }
 
 	    
