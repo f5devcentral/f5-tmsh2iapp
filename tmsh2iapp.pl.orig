@@ -5,7 +5,7 @@
 #                The tool is also able to generate a HEAT template to instantiate this iApp in Openstack
 #
 ###########################################################################################################################
-# Copyright 2016-2018 F5 Networks Inc 
+# Copyright 2016 F5 Networks Inc 
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -256,8 +256,8 @@
 # 2018/05/30 - u.alonsocamaro@f5.com - @import(asm-policy) is now supported with upcoming BIG-IP v14 or using v13 + fixes for ID693694 and ID675232. 
 #                                      Note that to due to pending fix for ID721717 in order to allow iApp reconfiguration the iApp has to be created with -disable-strict-updates
 # 2018/05/31 - u.alonsocamaro@f5.com - FIX: stray character in heat_parameters_file
-# 2018/06/04 - u.alonsocamaro@f5.com - Added container-configmap feature to create config maps for the BIG-IP Controller aka Container Connector
-# 2018/06/04 - u.alonsocamaro@f5.com - Introduction of attribute @json(list) to allow handling of JSON lists by tmsh2iapp by transforming the JSONlist into a space separated list.
+# 2018/06/01 - u.alonsocamaro@f5.com - Added container-configmap feature to create config maps for the BIG-IP Controller aka Container Connector
+# 2018/06/01 - u.alonsocamaro@f5.com - Introduction of attribute @json(list) to allow handling of JSON lists by tmsh2iapp by transforming the JSONlist into a space separated list.
 #
 #                                      This feature has been created for handling multiple-choice/multiple-select survey variables in Ansible Tower but it might be useful for other use cases too.
 #
@@ -283,9 +283,9 @@
 #                                      @json(list): __variable1__
 #                                      @json(list): __variable2__
 #
-# 2018/06/04 - u.alonsocamaro@f5.com - Added iapp_implementation_variables_log to print all variables when the iApp is being instantiated
+# 2018/06/01 - u.alonsocamaro@f5.com - Added iapp_implementation_variables_log to print all variables when the iApp is being instantiated
 
-$tmsh2iapp_version= "20180604.3";
+$tmsh2iapp_version= "20180601.3";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -405,7 +405,7 @@ $import_filename=~ s/\.t2i$/\.import.json/;
 ### Default settings
 
 $option{"default-route-domain"}= "true";
-$iapp{"description"}= "\"iApp $iapp_name generated with tmsh2iapp $tmsh2iapp_version\"";
+$iapp{"description"}= "iApp $iapp_name generated with tmsh2iapp $tmsh2iapp_version";
     
 ###
 
@@ -460,7 +460,7 @@ foreach $al (@attribute_lines) {
 	$variable= $2;
 	$value= $3;
 
-	print STDERR "attribute: $attribute, variable: $variable, value: $value\n" if ($debug);
+	# print STDERR "attribute: $attribute, variable: $variable, value: $value\n";
 	
     } elsif (/\@service_folder/) {
 	# Do nothing, @service_folder can be anywhere
@@ -658,7 +658,6 @@ sub iapp_implementation_begin {
 
             implementation {
 
-                puts "################################################################################################################"
 		puts "Starting iApp \$tmsh::app_name.app generated with tmsh2iapp version $tmsh2iapp_version"
 
                 set partition "/[lindex [split [tmsh::pwd] /] 1]"
@@ -672,7 +671,7 @@ sub iapp_implementation_begin {
                    set defaultrd [tmsh::get_field_value [lindex \$obj 0] default-route-domain]
                 }
   
-                puts "The iApp of type $ARGV[0] is being instantiated in \@partition \$partition, \@defaultrd is \$defaultrd"
+                puts "The iApp of type $ARGV[0] is being instantiated in \@partition \$partition, \@defaultrd is \$defaultrd";
 
 IMPLEMENTATION_BEGIN
     
@@ -803,40 +802,39 @@ sub iapp_implementation_import {
 }
 
 sub iapp_implementation_variables_log {
-
-    my $sp= "                ";
+    
     my $retval= "\n";
     
-    $retval.= $sp . "puts \"Dumping values passed to iApp variables\"\n";
+    $retval.= "puts \"Dumping values passed to iApp variables\"\n";
     
-    $retval.= $sp . "puts \">>> regular variables\"\n";
+    $retval.= "puts \">>> regular variables\"\n";
     
     foreach $v (sort @variables) {
 	
         $vname= $v;
         $vname=~ s/__(.*?)__/var__$1/;
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $v >\${::$vname}<\" } else { puts \"> $v is undefined\" }\n" . "\n";
+        $retval.= "puts \"$v >\${::$vname}<\"\n";
     }
     
-    $retval.= $sp . "puts \">>> pool member variables\"\n";
+    $retval.= "puts \">>> pool member variables\"\n";
     
     foreach $pm (sort @pool_members) {
 	
         $vname= $pm;
         $vname=~ s/__(.*)__/$1/;
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $pm >\${::$vname}<\" } else { puts \"> $pm is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $pm >\${::$vname}<\"\n";
 	
 	$vname.= "_properties";
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $pm properties >\${::$vname}<\" } else { puts \"> $pm properties is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $pm properties >\${::$vname}<\"\n";
     }
     
-    $retval.= $sp . "puts \">>> data record variables\"\n";
+    $retval.= "puts \">>> data record variables\"\n";
     
     foreach $dr (sort @data_records) {
 	
         $vname= $dr;
         $vname=~ s/__(.*)__/$1/;
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $dr >\${::$vname}<\" } else { puts \"> $dr properties is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $dr >\${::$vname}<\"\n";
     }
     
     $retval.= "puts \">>> firewall address list variables\"\n";
@@ -845,46 +843,46 @@ sub iapp_implementation_variables_log {
 	
         $vname= $fwal;
         $vname=~ s/__(.*)__/$1/;
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $fwal >\${::$vname}<\" } else { puts \"> $fwal is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $fwal >\${::$vname}<\"\n";
     }
     
-    $retval.= $sp . "puts \">>> firewall port list variables\"\n";
+    $retval.= "puts \">>> firewall port list variables\"\n";
     
     foreach $fwpl (sort @fw_port_list) {
 	
         $vname= $fwpl;
         $vname=~ s/__(.*)__/$1/;
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $fwpl >\${::$vname}<\" } else { puts \"> $fwpl is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $fwpl >\${::$vname}<\"\n";
     }
     
-    $retval.= $sp . "puts \">>> url match category list variables\"\n";
+    $retval.= "puts \">>> url match category list variables\"\n";
     
     foreach $urlcat (sort @urlcat_match_list) {
 	
         $vname= $urlcat;
         $vname=~ s/__(.*)__/$1/;
-        $retval.= "if {[info exists {::$vname}]} { puts \"> $urlcat >\${::$vname}<\" } else { puts \"> $urlcat is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $urlcat >\${::$vname}<\"\n";
     }
     
-    $retval.= $sp . "puts \">>> url nomatch category list variables\"\n";
+    $retval.= "puts \">>> url nomatch category list variables\"\n";
     
     foreach $urlcat (sort @urlcat_nomatch_list) {
 	
         $vname= $urlcat;
         $vname=~ s/__(.*)__/$1/;
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $urlcat >\${::$vname}<\" } else { puts \"> $urlcat is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $urlcat >\${::$vname}<\"\n";
     }
     
-    $retval.= $sp . "puts \">>> iworkflow variables\"\n";
+    $retval.= "puts \">>> iworkflow variables\"\n";
     
     foreach $iwork (sort @iworkflow_variables) {
 	
         $vname= $iwork;
         $vname=~ s/__(.*)__/$1/;
-        $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $iwork >\${::$vname}<\" } else { puts \"> $iwork is undefined\" }\n" . "\n";
+        $retval.= "puts \"> $iwork >\${::$vname}<\"\n";
     }
     
-    $retval.= $sp . "puts \"End of dumping values passed to iApp variables\"\n";
+    $retval.= "puts \"End of dumping values passed to iApp variables\"\n";
     return $retval;
 }
 
@@ -2423,7 +2421,7 @@ data:
             ]
           },
           "iappOptions": {
-            "description": $iapp{"description"},
+            "description": "$iapp{"description"}",
             "trafficGroup": "/Common/traffic-group-1"
           },
 HEAD
