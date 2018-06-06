@@ -12,11 +12,12 @@ but some fluency in tmsh syntax is recommended.
 # Main characteristics of tmsh2iapp
 
 * Allows creating an iApp using a **declarative** tmsh-like syntax (these are called .t2i files)
-* It has been used with **LTM, ASM, APM, AFM and PEM modules**.
+* It has been used with **LTM, ASM (v13+), APM, AFM and PEM modules**.
 * Baseline .t2i files can be created easily with the BIG-IP GUI
 * Helps deploying the iApp by creating sample Ansible roles & playbooks, Heat templates and iWorkflow JSON files
 * Can easily create **iApps that contain base configurations (self-IPs, VLANs, etc...) that can be deployed in a BIG-IP cluster and config-sync'ed assigning per-BIG-IP values appropiately**.
 * It can be used in any computer with perl installed -- including the BIG-IP
+* It supports **passing parameters as JSON lists** (useful for handling multiple-choice/multiple-select survey variables in Ansible Tower or any other YAML based automation)
 * It is not BIG-IP version specific but it is being tested with BIG-IP 11.6-13.1
 * Supports **route-domains and partitions**
 * Supports LTM policies
