@@ -271,17 +271,17 @@
 #
 #                                      This new feature would transform this JSON list into "value1 value2" which is the native tmsh2iapp format
 #
-#                                      This is done with the following TCL commands wich is not very nice but does the work for the time being:
-#
-#                                      % set str [string map {\[ {} \] {} \' {} \" {} , { }} $str]
-#                                      % set str [regexp -all -inline {\S+} $str]
-#                                      
-#                                      TODO: evaluate the use of https://core.tcl.tk/tcllib/doc/trunk/embedded/www/tcllib/files/modules/yaml/yaml.html
-#
 #                                      For usage define one @json attribute statement for each variable. This might change in the future.
 #
 #                                      @json(list): __variable1__
 #                                      @json(list): __variable2__
+#
+#
+#                                      CAVEAT: It has been found that values that have quoted values with spaces within the quotes fail. Seems a problem in the REST worker.
+#
+#                                              example of this issue: - 'key4 \{ data "value 4" \}'
+#
+#                                      NOTE: At the moment PEM URL categories and local variables don't support JSON list formatted values.
 #
 # 2018/06/04 - u.alonsocamaro@f5.com - Added iapp_implementation_variables_log to print all variables when the iApp is being instantiated
 
@@ -701,6 +701,41 @@ proc debug { headers msg level } {
 
 IMPLEMENTATION_PROC_DEBUG
 
+    my $implementation_proc_jsonlist2txt= << "IMPLEMENTATION_PROC_JSONLIST2TXT";
+
+# jsonlist2txt processes JSON list, ie: ['key1 \{ data "value 1" \}', 'key2 \{ data "value 2" \}', 'key3 \{ data "value 3" \}']
+# and transforms it into: key1 { data "value 1" } key2 { data "value 2" } key3 { data "value 3" }
+#
+# This proc is far from being YAML conformant: the procedure expects that the elements in the list doesn't contain the character ","
+#
+
+proc jsonlist2txt {jlist }{
+
+  puts "jsonlist2txt: processing >\$jlist<"
+
+  # remove the outer brackets
+  set jlist [string trim \$jlist {[]}]
+  # split the elements, using "," as delimiter
+  set jsplit [split \$jlist ,]
+
+  # trim the quotes and spaces of each element and concatenate them with an space. je stands for json element
+  set retval ""
+  foreach je \$jsplit { 
+    set jetrim [subst [string trim \$je {"' }]]
+    append retval \$jetrim " "
+  }
+
+  # remove leading space
+  set retval [string trim \$retval]
+
+  puts "jsonlist2txt: output >\$retval<"
+
+  return \$retval
+}
+
+IMPLEMENTATION_PROC_JSONLIST2TXT
+
+
     my $implementation_proc_curl_save_file= << "IMPLEMENTATION_PROC_CURL_SAVE_FILE";
 
 # Modified from appsvcs_integration_v2.0.tmpl to support local files as well
@@ -732,13 +767,20 @@ proc curl_save_file { url filename {error_exit 1}} {
 
 IMPLEMENTATION_PROC_CURL_SAVE_FILE
 
+    my $retval= "";
+
     $check_import_type= "asm_policy"; # To avoid the following warning Name "main::asm_policy" used only once: possible typo at ./tmsh2iapp.pl line 477.
     if (@$check_import_type) {
 	
-	return $implementation_proc_debug . $implementation_proc_curl_save_file . "\n";
+	$retval.= $implementation_proc_debug;
+        $retval.= $implementation_proc_curl_save_file;
     }
-    
-    return "\n";
+   
+    if (scalar(keys %json_list)){
+        $retval.= $implementation_proc_jsonlist2txt;	
+    }
+ 
+    return $retval . "\n";
 }
 
 sub iapp_implementation_changepath {
@@ -780,18 +822,35 @@ sub iapp_implementation_import {
 	    $url=~ s/__(.*?)__/var__$1_import/;
 	    
 	    if ($import_otype eq "data-group") {
-		$import.= "                tmsh::create sys file $import_otype \${::$vname} source-path \${::$url} $properties{$var}\n";
+
+                $import.= "                set cmd \"tmsh::create sys file $import_otype \${::$vname} source-path \${::$url} $properties{$var}\"\n";
+                $import.= "                puts \$cmd\n";
+		$import.= "                eval \$cmd\n";
+
 	    } elsif ($import_otype eq "asm-policy") {
+
 		$import.= "                curl_save_file \${::$url} $cfgdir/\${::$vname}.xml\n";
-		$import.= "                tmsh::load asm policy \${::$vname} file $cfgdir/\${::$vname}.xml overwrite\n";
-		$import.= "                tmsh::modify asm policy \${::$vname} active\n";
+
+		$import.= "                set cmd \"tmsh::load asm policy \${::$vname} file $cfgdir/\${::$vname}.xml overwrite\"\n";
+                $import.= "                puts \$cmd\n";
+                $import.= "                eval \$cmd\n";
+
+		$import.= "                set cmd \"tmsh::modify asm policy \${::$vname} active\"\n";
+                $import.= "                puts \$cmd\n";
+                $import.= "                eval \$cmd\n";
 
             } elsif ($import_otype eq "ilx-workspace") {
 
-                $import.= "                tmsh::create ilx workspace \${::$vname} from-uri \${::$url}\n";
+                $import.= "                set cmd \"tmsh::create ilx workspace \${::$vname} from-uri \${::$url}\"\n";
+                $import.= "                puts \$cmd\n";
+                $import.= "                eval \$cmd\n";
 
 	    } else {
-		$import.= "                tmsh::create sys file $import_otype \${::$vname} source-path \${::$url}\n";
+
+		$import.= "                set cmd \"tmsh::create sys file $import_otype \${::$vname} source-path \${::$url}\"\n";
+                $import.= "                puts \$cmd\n";
+                $import.= "                eval \$cmd\n";
+
 	    }
 
 	}
@@ -839,7 +898,7 @@ sub iapp_implementation_variables_log {
         $retval.= $sp . "if {[info exists {::$vname}]} { puts \"> $dr >\${::$vname}<\" } else { puts \"> $dr properties is undefined\" }\n" . "\n";
     }
     
-    $retval.= "puts \">>> firewall address list variables\"\n";
+    $retval.= $sp . "puts \">>> firewall address list variables\"\n";
     
     foreach $fwal (sort @fw_address_list) {
 	
@@ -911,10 +970,7 @@ sub iapp_implementation_variables_instantiation {
 	# is there a value JSON list transformation for this variable?
 	if (defined($json_list{$v})) {
 
-	    # TODO: improve this code and extend it to other variable types
-	    $retval.= "\n";
-	    $retval.= "                set {::$vname} [string map {\[ {} \] {} \\\' {} \\\" {} , { }} \${::$vname}]\n";
-	    $retval.= "                set {::$vname} [regexp -all -inline {\\S+} \${::$vname}]\n";
+	    $retval.= "                set {::$vname} [jsonlist2txt \${::$vname}]\n";
 	}
 	
 	$map.= "$v {\${::$vname}} ";
@@ -932,13 +988,6 @@ sub iapp_implementation_variables_instantiation {
 
         $vname= $dr;
 	$vname=~ s/__(dr__.*?)__/$1/;
-	
-        if (defined($json_list{$dr})) {
-	    
-	    $retval.= "\n";
-	    $retval.= "                set {::$vname} [string map {\[ {} \] {} \\\' {} \\\" {} , { }} \${::$vname}]\n";
-	    $retval.= "                set {::$vname} [regexp -all -inline {\\S+} \${::$vname}]\n";
-        }
 	
 	$map.= "$dr {} ";
     }
@@ -1119,7 +1168,7 @@ sub iapp_implementation_incremental_loader {
 sub iapp_implementation_pool_members_modify {
     
     
-    $tmsh_cmds= "\n\n";
+    $retval= "\n\n";
     
     foreach $pm (sort @pool_members) {
 	
@@ -1128,10 +1177,18 @@ sub iapp_implementation_pool_members_modify {
 	
 	$vname= $pm; # var name in the iapp script
 	$vname=~ s/__(.*)__/$1/;
+
+        if (defined($json_list{$pm})) {
+            $retval.= "                set {::$vname} [jsonlist2txt \${::$vname}]\n";
+        }
 	
 	$vname_properties= $vname . "_properties";
 	
-	$tmsh_cmds.= "                if {([info exists {::$vname}]) && ([string length \${::$vname}] > 0)} {\n";
+	$retval.= "                if {([info exists {::$vname}]) && ([string length \${::$vname}] > 0)} {\n";
+
+        if (defined($json_list{$pm})) {
+            $retval.= "                set {::$vname} [jsonlist2txt \${::$vname}]\n";
+        }
 
         #it ($option{"nodes-in-common"} eq "true") {
 	#    
@@ -1139,34 +1196,35 @@ sub iapp_implementation_pool_members_modify {
 
 	if ($option{"default-route-domain"} eq "true") {
 	    
-	    $tmsh_cmds.= "                   if {(\$defaultrd != 0) && ([string first \"%\" \${::$vname}] == -1)} {\n";
-	    $tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { [string map \": %\${defaultrd}:\" \${::$vname}] } }\"\n";
-	    $tmsh_cmds.= "                   } else {\n";
-	    $tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
-	    $tmsh_cmds.= "                   }\n";
+	    $retval.= "                   if {(\$defaultrd != 0) && ([string first \"%\" \${::$vname}] == -1)} {\n";
+	    $retval.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { [string map \": %\${defaultrd}:\" \${::$vname}] } }\"\n";
+	    $retval.= "                   } else {\n";
+	    $retval.= "                      set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	    $retval.= "                   }\n";
+
 	} else {
-	    $tmsh_cmds.= "                   set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
+	    $retval.= "                   set cmd \"tmsh::modify ltm pool $pname { members replace-all-with { \${::$vname} } }\"\n";
 	}
 		
-	$tmsh_cmds.= "                   puts \"\$cmd\"\n";
-	$tmsh_cmds.= "                   eval \$cmd\n";
-        $tmsh_cmds.= "                   if {([info exists {::$vname_properties}]) && ([string length \${::$vname_properties}] > 0)} {\n";
-        $tmsh_cmds.= "                      set cmd \"tmsh::modify ltm pool $pname { members modify { all { \${::$vname_properties} } } }\"\n";
-        $tmsh_cmds.= "                      puts \"\$cmd\"\n";
-        $tmsh_cmds.= "                      eval \$cmd\n";
-        $tmsh_cmds.= "                   }\n";
-	$tmsh_cmds.= "                }\n";
+	$retval.= "                   puts \"\$cmd\"\n";
+	$retval.= "                   eval \$cmd\n";
+        $retval.= "                   if {([info exists {::$vname_properties}]) && ([string length \${::$vname_properties}] > 0)} {\n";
+        $retval.= "                      set cmd \"tmsh::modify ltm pool $pname { members modify { all { \${::$vname_properties} } } }\"\n";
+        $retval.= "                      puts \"\$cmd\"\n";
+        $retval.= "                      eval \$cmd\n";
+        $retval.= "                   }\n";
+	$retval.= "                }\n";
 	
     }
     
-    return $tmsh_cmds;
+    return $retval;
 }
 
 
 sub iapp_implementation_data_records_modify {
     
     
-    $tmsh_cmds= "\n\n";
+    $retval= "\n\n";
     
     foreach $dr (sort @data_records) {
 	
@@ -1175,17 +1233,21 @@ sub iapp_implementation_data_records_modify {
 	
 	$vname= $dr; # var name in the iapp script
 	$vname=~ s/__(.*)__/$1/;
+
+	$retval.= "                if {[info exists {::$vname}] && [string length \${::$vname}] > 0} {\n";
+
+        if (defined($json_list{$dr})) {
+            $retval.= "                set {::$vname} [jsonlist2txt \${::$vname}]\n";
+        }
+
+	$retval.= "                   set cmd \"tmsh::modify ltm data-group internal $dname records { replace-all-with { \${::$vname} } }\"\n";
 	
-	$tmsh_cmds.= "                if {[info exists {::$vname}] && [string length \${::$vname}] > 0} {\n";
-        # This is curious... tmsh modify from the cli doesn't require the extra brackets embracing the records parameter
-	$tmsh_cmds.= "                   set cmd \"tmsh::modify ltm data-group internal $dname description $dname { records replace-all-with { \${::$vname} } }\"\n";
-	
-	$tmsh_cmds.= "                   puts \"\$cmd\"\n";
-	$tmsh_cmds.= "                   eval \$cmd\n";
-	$tmsh_cmds.= "                }\n";
+	$retval.= "                   puts \"\$cmd\"\n";
+	$retval.= "                   eval \$cmd\n";
+	$retval.= "                }\n";
     }
     
-    return $tmsh_cmds;
+    return $retval;
 }
 
 sub iapp_implementation_afm_address_list_modify {
@@ -1201,7 +1263,13 @@ sub iapp_implementation_afm_address_list_modify {
         $vname= $fwal; # var name in the iapp script
         $vname=~ s/__(.*)__/$1/;
 	
-        $tmsh_cmds.= "                if {[string length \${::$vname}] > 0} {\n";
+        $tmsh_cmds.= "                if {[info exists {::$vname}] && [string length \${::$vname}] > 0} {\n";
+
+        if (defined($json_list{$v})) {
+
+            $tmsh_cmds.= "                   set {::$vname} [jsonlist2txt \${::$vname}]\n";
+        }
+
         $tmsh_cmds.= "                   set cmd \"tmsh::modify security firewall address-list $fwal_name { addresses replace-all-with { \${::$vname} } }\"\n";
 	
         $tmsh_cmds.= "                   puts \"\$cmd\"\n";
@@ -1225,7 +1293,13 @@ sub iapp_implementation_afm_port_list_modify {
         $vname= $fwpl; # var name in the iapp script
         $vname=~ s/__(.*)__/$1/;
 	
-        $tmsh_cmds.= "                if {[string length \${::$vname}] > 0} {\n";
+        $tmsh_cmds.= "                if {[info exists {::$vname}] && [string length \${::$vname}] > 0} {\n";
+
+        if (defined($json_list{$v})) {
+
+            $tmsh_cmds.= "                   set {::$vname} [jsonlist2txt \${::$vname}]\n";
+        }
+
         $tmsh_cmds.= "                   set cmd \"tmsh::modify security firewall port-list $fwpl_name { ports replace-all-with { \${::$vname} } }\"\n";
 	
         $tmsh_cmds.= "                   puts \"\$cmd\"\n";
@@ -1256,6 +1330,7 @@ sub iapp_implementation_pem_urlcat_modify {
         $tmsh_cmds.= "                set urlcats [split \$urlcats]\n";
         $tmsh_cmds.= "                set i 0\n";
         $tmsh_cmds.= "                foreach cat \$urlcats {\n";
+
         # 
         # for some unknown funny reason tmsh::modify requires braces after rules and CLI tmsh doesn't:
         # root@(afm)(cfg-sync Standalone)(Active)(/Common)(tmos)# modify pem policy test.app/customfiltering rules { modify { filterurls { url-categorization-filters add { url_category0 { url-category Social_Networking operation match } } } } }
