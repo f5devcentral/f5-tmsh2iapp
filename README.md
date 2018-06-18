@@ -40,14 +40,16 @@ but some fluency in tmsh syntax is recommended.
 
 # Alternatives to tmsh2iapp
 
+The world is full of choices! Please consier these:
+
 * BIG-IQ 6.0 supports creation of configuration templates, several BIG-IP modules are supported too. It also provides ansible modules for deploying.
 * ![Application Services 3 (AS3)](http://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/3/) provides another F5 supported way deploying configurations in a declarative fashion. 
 
 These two are excellent alternatives and they are officially supported by F5. On the other hand F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP.
 
 tmsh2iapp plus points are:
-- tmsh2iapp doesn't intend to know much about the intended configuration: configuration parsing is left up to the BIG-IP. This makes tmsh2iapp simpler to maintain and more flexible with respect of what configuration can accept and which BIG-IP versions are supported.
-- tmsh2iapp iApps doesn't require an intermediary device (in the case of BIG-IQ) or intermediary REST nodejs worker (in the case of AS3).
+* tmsh2iapp doesn't intend to know much about the intended configuration: configuration parsing is left up to the BIG-IP. This makes tmsh2iapp simpler to maintain and more flexible with respect of what configuration can accept and which BIG-IP versions are supported.
+* tmsh2iapp iApps doesn't require an intermediary device -in the case of BIG-IQ- or intermediary REST nodejs worker (aka API Services Gateway) -in the case of AS3.
 
 # Using tmsh2iapp
 
