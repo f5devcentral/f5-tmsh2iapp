@@ -38,6 +38,17 @@ but some fluency in tmsh syntax is recommended.
     * ssl-key                  SSL certificate keys management
 
 
+# Alternatives to tmsh2iapp
+
+* BIG-IQ 6.0 supports creation of configuration templates, several BIG-IP modules are supported too. It also provides ansible modules for deploying.
+* ![Application Services 3 (AS3)](http://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/3/) provides another F5 supported way deploying configurations in a declarative fashion. 
+
+These two are excellent alternatives and they are officially supported by F5. On the other hand F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP.
+
+tmsh2iapp plus points are:
+- tmsh2iapp doesn't intend to know much about the intended configuration: configuration parsing is left up to the BIG-IP. This makes tmsh2iapp simpler to maintain and more flexible with respect of what configuration can accept and which BIG-IP versions are supported.
+- tmsh2iapp iApps doesn't require an intermediary device (in the case of BIG-IQ) or intermediary REST nodejs worker (in the case of AS3).
+
 # Using tmsh2iapp
 
 **Download the tool from ![this link](https://raw.githubusercontent.com/f5devcentral/f5-tmsh2iapp/master/tmsh2iapp.pl).**
@@ -50,3 +61,5 @@ If you have any question post it in https://devcentral.f5.com/questions. Note th
 We would love to hear your experiences with this tool, please share them in [this link of devcentral](https://devcentral.f5.com/codeshare/tmsh2iapp-iapp-generator-create-iapps-in-minutes-1065).
 
 **tmsh2iapp is released to the community under the [Apache v2 license](http://www.apache.org/licenses/LICENSE-2.0.txt)**. It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+
