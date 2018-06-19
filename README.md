@@ -45,7 +45,7 @@ The world is full of choices! Please consier these:
 * BIG-IQ 6.0 supports creation of configuration templates, several BIG-IP modules are supported too. It also provides ansible modules for deploying.
 * ![Application Services 3 (AS3)](http://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/3/) provides another F5 supported way deploying configurations in a declarative fashion. 
 
-These two are excellent alternatives and they are officially supported by F5. On the other hand F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP.
+These two are excellent alternatives and they are officially supported by F5. On the other hand official F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP. This non-official open-source project will provide support on a best effort basis.
 
 tmsh2iapp plus points are:
 * tmsh2iapp doesn't intend to know much about the intended configuration: configuration parsing is left up to the BIG-IP. This makes tmsh2iapp simpler to maintain and more flexible with respect of what configuration can accept and which BIG-IP versions are supported.
