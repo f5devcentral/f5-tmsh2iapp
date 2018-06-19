@@ -65,4 +65,8 @@ We would love to hear your experiences with this tool, please share them in [thi
 
 **tmsh2iapp is released to the community under the [Apache v2 license](http://www.apache.org/licenses/LICENSE-2.0.txt)**. It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 
+{::nomarkdown}
+<a href="https://cla-assistant.io/f5devcentral/f5-tmsh2iapp"><img src="https://cla-assistant.io/readme/badge/f5devcentral/f5-tmsh2iapp" alt="CLA assistant" /></a>
+{:/}
+
 
