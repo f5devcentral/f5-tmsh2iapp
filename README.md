@@ -48,7 +48,7 @@ The world is full of choices! Please consier these:
 These two are excellent alternatives and they are officially supported by F5. On the other hand official F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP. This non-official open-source project will provide support on a best effort basis.
 
 tmsh2iapp plus points are:
-* tmsh2iapp doesn't intend to know much about the intended configuration: configuration parsing is left up to the BIG-IP. This makes tmsh2iapp simpler to maintain and more flexible with respect of what configuration can accept and which BIG-IP versions are supported.
+* Virtually any configuration can be templatized with tmsh2iapp. This is because tmsh2iapp doesn't intend to know much about the intended configuration. Configuration parsing is mainly left up to the BIG-IP. This makes tmsh2iapp simpler to maintain and more flexible with respect of what configuration can accept and which BIG-IP versions are supported.
 * tmsh2iapp iApps doesn't require an intermediary device - in the case of BIG-IQ - or intermediary REST nodejs worker (aka API Services Gateway) - in the case of AS3.
 * tmsh2iap is able to generate template configuration for base configs (ie: non-floating self-IPs, VLANs, /system configs, etc..).
 
