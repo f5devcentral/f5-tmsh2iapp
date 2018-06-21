@@ -44,7 +44,7 @@ The world is full of choices! Please consier these:
 
 * BIG-IQ 6.0 supports creation of configuration templates, several BIG-IP modules are supported too. Functionally wise it is comprenhensive. Provides sample API calls to instantiate the resulting templates. It is also possible to deploy pre-defined templates with bigiq_application_* ansible modules in a simplified manner.
 
-* ![Application Services 3 (AS3)](http://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/3/) provides another F5 supported way deploying configurations in a declarative fashion supporting common use cases/configurations. At present Ansible instantiation is performed with the URI module submiting JSON documents with the desired configuration.
+* ![Application Services 3 (AS3)](http://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/3/) provides another F5 supported way deploying configurations in a declarative fashion supporting common use cases/configurations using a REST interface. At present Ansible instantiation can also be performed with the URI module submiting JSON documents with the desired configuration.
 
 These two are excellent alternatives and they are officially supported by F5. On the other hand, official F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP. This non-official open-source project will provide support on a best effort basis.
 
