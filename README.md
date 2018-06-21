@@ -42,10 +42,11 @@ but some fluency in tmsh syntax is recommended.
 
 The world is full of choices! Please consier these:
 
-* BIG-IQ 6.0 supports creation of configuration templates, several BIG-IP modules are supported too. It also provides ansible modules for deploying.
-* ![Application Services 3 (AS3)](http://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/3/) provides another F5 supported way deploying configurations in a declarative fashion. 
+* BIG-IQ 6.0 supports creation of configuration templates, several BIG-IP modules are supported too. Functionally wise it is comprenhensive. Provides sample API calls to instantiate the resulting templates. It is also possible to deploy pre-defined templates with bigiq_application_* ansible modules in a simplified manner.
 
-These two are excellent alternatives and they are officially supported by F5. On the other hand official F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP. This non-official open-source project will provide support on a best effort basis.
+* ![Application Services 3 (AS3)](http://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/3/) provides another F5 supported way deploying configurations in a declarative fashion supporting common use cases/configurations. At present Ansible instantiation is performed with the URI module submiting JSON documents with the desired configuration.
+
+These two are excellent alternatives and they are officially supported by F5. On the other hand, official F5 support of tmsh2iapp is limited to the API usage that tmsh2iapp makes use of BIG-IP. This non-official open-source project will provide support on a best effort basis.
 
 tmsh2iapp plus points are:
 * Virtually any configuration can be templatized with tmsh2iapp. This is because tmsh2iapp doesn't intend to know much about the intended configuration. Configuration parsing is mainly left up to the BIG-IP. This makes tmsh2iapp simpler to maintain and more flexible with respect of what configuration can accept and which BIG-IP versions are supported.
