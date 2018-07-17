@@ -284,7 +284,7 @@
 #                                      NOTE: At the moment PEM URL categories and local variables don't support JSON list formatted values.
 #
 # 2018/06/04 - u.alonsocamaro@f5.com - Added iapp_implementation_variables_log to print all variables when the iApp is being instantiated
-# 2018/07/17 - u.alonsocamaro@f5.com - Added @apl option of using multichoice, editchoice and choice GUI inputs
+# 2018/07/17 - u.alonsocamaro@f5.com - Added @apl support allowing the use of multichoice, editchoice and choice GUI inputs
 
 $tmsh2iapp_version= "20180717.1";
 
