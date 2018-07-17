@@ -284,8 +284,9 @@
 #                                      NOTE: At the moment PEM URL categories and local variables don't support JSON list formatted values.
 #
 # 2018/06/04 - u.alonsocamaro@f5.com - Added iapp_implementation_variables_log to print all variables when the iApp is being instantiated
+# 2018/07/17 - u.alonsocamaro@f5.com - Added @apl option of using multichoice, editchoice and choice GUI inputs
 
-$tmsh2iapp_version= "20180604.3";
+$tmsh2iapp_version= "20180717.1";
 
 # use strict;
 binmode STDOUT, ":utf8";
@@ -624,7 +625,7 @@ sub iapp_create {
     if ($create_file) {
 	
         print IAPP $iapp; 
-	
+
         close IAPP
 	    or die "Couldn't close the file for the iApp ($iapp_filename): $!";
 	
@@ -1493,19 +1494,34 @@ TXT
             if ($vt_name eq "local") { # Special processing for local variables
 		$txt= $txt . "                        string bigip_names display \"xxlarge\"\n";
             }
-  	    
+
+	    
 	    foreach $v (sort @$vartype) {
 
-		if (defined($apl{$v})) {
+                $vname= $v;
+                $vname=~ s/__(.*__|)(.+)__/$2/;
+
+		$input_type= "string";   # By default all variables are strings
+
+		if (defined($apl{$v})) { # but we can also allow the user to specify multichoice, editchoice and choice in the GUI with the @apl attribute
+		
 		    $p= $apl{$v};
+                    $_= $p;
+
+		    if (/^(\s*(multichoice|editchoice|choice)\s+)(.*)/) {
+			
+			$input_type= $2;
+			$p= $3;
+			$p=~ s/\\n/\n/g; # We want to interpret newlines
+		    }
+
+                    print STDERR "\@apl attribute for variable \"$vname\" of type \"$input_type\" is \"$p\"\n" if ($debug);
+		    
 		} else {
 		    $p= "display \"xxlarge\"";
 		}
 		
-		$vname= $v;
-		$vname=~ s/__(.*__|)(.+)__/$2/;
-		
-		$txt= $txt . "                        string $vname $p\n";
+		$txt= $txt . "                        $input_type $vname $p\n";
 		
 		if ($vt_name eq "pm") { # Special processing for pm properties automatic variables
 		    $vname_properties= $vname . "_properties";
