@@ -36,6 +36,8 @@ but some fluency in tmsh syntax is recommended.
     * ssl-crl                  SSL CRL files management
     * ssl-csr                  SSL Certificate Signing Request
     * ssl-key                  SSL certificate keys management
+* **Options available to beautify the GUI** allowing specifying field text width, validators, and single and multi-selector which lists that can be static or dynamically populated at run time.
+    
 
 
 # Alternatives to tmsh2iapp
