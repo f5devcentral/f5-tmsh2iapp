@@ -38,7 +38,7 @@ but some fluency in tmsh syntax is recommended.
     * ssl-key                  SSL certificate keys management
 * **Options available to beautify the GUI** allowing specifying field text width, validators, and single and multi-selector which lists that can be static or dynamically populated at run time.
     
-# Using iApps instead of plain ansible, plain REST calls, etc...
+# Using iApps for automation instead of plain ansible, plain REST calls, etc...
 
 * When deploying configurations as iApps the **configurations are self-contained**, that is: on delete all objects created by the iApp are automatically deleted and there will be no stale configurations left
 
