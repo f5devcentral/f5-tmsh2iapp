@@ -1,7 +1,7 @@
 ![tmsh2iapp main diagram](https://github.com/f5devcentral/f5-tmsh2iapp/wiki/images/tmsh2iapp_main_diagram.png)
 
 # f5-tmsh2iapp
- tmsh2iapp is an iApp generator using existing configurations as a template. The resulting iApps are **fully parametrizable**. It also generates Ansible playbooks & roles, Heat templates and iWorkflow JSON files to deploy them 
+ tmsh2iapp is an iApp generator using existing configurations as a template. The resulting iApps are **fully parametrizable**. It also generates Ansible playbooks & roles, Heat templates, iWorkflow JSON files and container ConfigMaps to ease the deployment 
  
 The purpose of this project is to make as easy as possible deploying services in the F5, 
 automate and orchestrate them with third party SDN/NFV/Automation/Orchestration products.
