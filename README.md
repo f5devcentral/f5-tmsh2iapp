@@ -42,7 +42,7 @@ but some fluency in tmsh syntax is recommended.
 
 * When deploying configurations as iApps the **configurations are self-contained**, that is: on delete all objects created by the iApp are automatically deleted and there will be no stale configurations left
 
-* iApps can be deployed with ansiblle, REST, etc... **it just becomes easier to deploy** because regardless the configuration size only two calls are quired: one call to import the template (if it is noy already in the BIG-IP) and one to create an instance of the iApp.
+* iApps can be deployed with ansiblle, REST, etc... **configurations just become easier to deploy** because regardless the configuration size only two calls are quired: one call to import the template (if it is noy already in the BIG-IP) and one to create an instance of the iApp.
 
 * **tmsh2iapp** allows creation of iApps that contain **base configs too (ie: L1/L2/L3 network elements including non floating ones)** which can be sync'ed in HA configurations seamlessly.
 
