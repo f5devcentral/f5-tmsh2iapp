@@ -77,16 +77,3 @@ We would love to hear your experiences with this tool, please share them in [thi
 <a href="https://cla-assistant.io/f5devcentral/f5-tmsh2iapp"><img src="https://cla-assistant.io/readme/badge/f5devcentral/f5-tmsh2iapp" alt="CLA assistant" /></a>
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
