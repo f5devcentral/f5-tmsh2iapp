@@ -1,3 +1,5 @@
+> This repo is archived and is no longer actively maintained.
+
 ![tmsh2iapp main diagram](https://github.com/f5devcentral/f5-tmsh2iapp/wiki/images/tmsh2iapp_main_diagram.png)
 
 # f5-tmsh2iapp
